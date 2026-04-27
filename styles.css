@@ -311,7 +311,7 @@ header p {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 1.5rem;
+    padding: 1rem;
     position: relative;
     overflow: hidden;
     cursor: pointer;
@@ -343,6 +343,7 @@ header p {
 .metric-card.purple::before { background: var(--purple); }
 .metric-card.orange::before { background: var(--orange); }
 .metric-card.red::before { background: var(--danger); }
+.metric-card.pink::before { background: #ec4899; }
 
 .card-header {
     display: flex;
@@ -375,9 +376,10 @@ header p {
 .metric-card.purple .card-icon { color: var(--purple); background: rgba(139, 92, 246, 0.1); }
 .metric-card.orange .card-icon { color: var(--orange); background: rgba(249, 115, 22, 0.1); }
 .metric-card.red .card-icon { color: var(--danger); background: rgba(239, 68, 68, 0.1); }
+.metric-card.pink .card-icon { color: #ec4899; background: rgba(236, 72, 153, 0.1); }
 
 .card-value {
-    font-size: 2.25rem;
+    font-size: 1.75rem;
     font-weight: 800;
     margin-bottom: 0.25rem;
     transition: color 0.3s;
@@ -397,6 +399,7 @@ header p {
 .purple .card-subtext { color: var(--purple); }
 .orange .card-subtext { color: var(--orange); }
 .red .card-subtext { color: var(--danger); }
+.pink .card-subtext { color: #ec4899; }
 
 .card-sparkline {
     position: absolute;

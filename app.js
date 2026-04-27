@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
             line: null,
             sparks: {}
         },
+        lineSellersData: {},
         filters: {
             date: '',
             selectedSellers: [], 
@@ -415,16 +416,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const countPendente = totalBase - presentInNC.length;
 
         updateMetric('valTotal', totalBase);
-        updateMetric('valMim', presentInNC.length); 
+        updateMetric('valTotal', totalBase);
         updateMetric('valComercial', countConforme);
         updateMetric('valNaoComercial', countPendente);
+        updateMetric('valDivergencia', countDivergencia);
         updateMetric('valReincidente', countReincidente);
 
         const getPerc = (val) => totalBase > 0 ? ((val/totalBase)*100).toFixed(1) + "%" : "0%";
-        document.getElementById('percMim').innerText = getPerc(presentInNC.length);
-        document.getElementById('percComercial').innerText = getPerc(countConforme);
-        document.getElementById('percNaoComercial').innerText = getPerc(countPendente);
-        document.getElementById('percReincidente').innerText = getPerc(countReincidente);
+        document.getElementById('percComercial').innerText = getPerc(countConforme) + " conforme";
+        document.getElementById('percNaoComercial').innerText = getPerc(countPendente) + " pendente";
+        document.getElementById('percDivergencia').innerText = getPerc(countDivergencia) + " divergência";
+        document.getElementById('percReincidente').innerText = getPerc(countReincidente) + " reincidente";
 
         renderTable(tableData);
         updateCharts(metricData);
@@ -532,14 +534,48 @@ document.addEventListener('DOMContentLoaded', () => {
         const ctxLine = document.getElementById('lineChart').getContext('2d');
         state.charts.line = new Chart(ctxLine, {
             type: 'line',
-            data: { labels: [], datasets: [{ label: 'Não Registrados', data: [], borderColor: '#f97316', backgroundColor: 'rgba(249, 115, 22, 0.1)', fill: true, tension: 0.4 }] },
-            options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } }, x: { grid: { display: false }, ticks: { color: '#64748b' } } }, maintainAspectRatio: false }
+            data: { labels: [], datasets: [] },
+            options: { 
+                plugins: { 
+                    legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 10 } } },
+                    tooltip: {
+                        callbacks: {
+                            afterBody: function(context) {
+                                const index = context[0].dataIndex;
+                                const label = state.charts.line.data.labels[index];
+                                const dayKey = label.split('/').reverse().join('-');
+                                const sellers = state.lineSellersData[dayKey] || {};
+                                let text = ['','Vendedores neste dia:'];
+                                for (let s in sellers) {
+                                    text.push(`- ${s}: ${sellers[s]}`);
+                                }
+                                return text;
+                            }
+                        }
+                    }
+                }, 
+                scales: { y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } }, x: { grid: { display: false }, ticks: { color: '#64748b' } } }, 
+                maintainAspectRatio: false,
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const label = state.charts.line.data.labels[index];
+                        if (label) {
+                            const [d, m, y] = label.split('/');
+                            const dayKey = `${y}-${m}-${d}`;
+                            document.getElementById('dateFilter').value = dayKey;
+                            state.filters.date = dayKey;
+                            applyFilters();
+                        }
+                    }
+                }
+            }
         });
 
         initSpark('sparkTotal', '#3b82f6');
-        initSpark('sparkMim', '#10b981');
-        initSpark('sparkComercial', '#8b5cf6');
-        initSpark('sparkNaoComercial', '#f97316');
+        initSpark('sparkComercial', '#10b981');
+        initSpark('sparkNaoComercial', '#ef4444');
+        initSpark('sparkDivergencia', '#f97316');
         initSpark('sparkReincidente', '#ec4899');
     }
 
@@ -559,14 +595,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!showingStatuses) {
             const sellerCounts = {};
+            let totalNCs = 0;
             metricData.forEach(nc => {
                 const seller = nc.vendedor || 'Desconhecido';
                 sellerCounts[seller] = (sellerCounts[seller] || 0) + 1;
+                totalNCs++;
             });
-            state.charts.pie.data.labels = Object.keys(sellerCounts);
+            
+            state.charts.pie.data.labels = Object.keys(sellerCounts).map(seller => {
+                const count = sellerCounts[seller];
+                const pct = totalNCs > 0 ? Math.round((count / totalNCs) * 100) : 0;
+                return `${seller} (${pct}%)`;
+            });
             state.charts.pie.data.datasets[0].data = Object.values(sellerCounts);
             
-            // Generate some colors based on sellers
             const colors = ['#3b82f6', '#8b5cf6', '#10b981', '#f97316', '#ef4444', '#ec4899', '#06b6d4', '#eab308'];
             state.charts.pie.data.datasets[0].backgroundColor = Object.keys(sellerCounts).map((_, i) => colors[i % colors.length]);
         } else {
@@ -593,14 +635,33 @@ document.addEventListener('DOMContentLoaded', () => {
         state.charts.pie.update();
 
         // Line chart (Evolução)
-        const dayCounts = {};
+        const days = {};
         metricData.forEach(nc => {
             const day = formatExcelDate(nc.data);
-            if (day) dayCounts[day] = (dayCounts[day] || 0) + 1;
+            if (!day) return;
+            if (!days[day]) days[day] = { CONFORME: 0, PENDENTE: 0, DIVERGENCIA: 0, REINCIDENTE: 0, sellers: {} };
+            
+            const g = state.dataGeral.find(item => item.pedido.toString() == nc.pedido.toString());
+            const s = computeStatus(nc, g);
+            days[day][s]++;
+            
+            const seller = nc.vendedor || 'Desc.';
+            days[day].sellers[seller] = (days[day].sellers[seller] || 0) + 1;
         });
-        const sortedDays = Object.keys(dayCounts).sort();
+
+        const sortedDays = Object.keys(days).sort();
+        state.lineSellersData = {};
+        sortedDays.forEach(d => { state.lineSellersData[d] = days[d].sellers; });
+        
         state.charts.line.data.labels = sortedDays.map(d => d.split('-').slice(1).reverse().join('/'));
-        state.charts.line.data.datasets[0].data = sortedDays.map(d => dayCounts[d]);
+        
+        state.charts.line.data.datasets = [
+            { label: 'Conforme', data: sortedDays.map(d => days[d].CONFORME), borderColor: '#10b981', backgroundColor: 'transparent', tension: 0.4 },
+            { label: 'Pendente', data: sortedDays.map(d => days[d].PENDENTE), borderColor: '#ef4444', backgroundColor: 'transparent', tension: 0.4 },
+            { label: 'Divergência', data: sortedDays.map(d => days[d].DIVERGENCIA), borderColor: '#f97316', backgroundColor: 'transparent', tension: 0.4 },
+            { label: 'Reincidente', data: sortedDays.map(d => days[d].REINCIDENTE), borderColor: '#ec4899', backgroundColor: 'transparent', tension: 0.4 }
+        ];
+        
         state.charts.line.update();
 
         Object.keys(state.charts.sparks).forEach(id => {
