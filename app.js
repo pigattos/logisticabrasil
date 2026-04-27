@@ -359,11 +359,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         let tableData = baseData;
-        if (state.filters.tableStart) {
-            tableData = tableData.filter(nc => formatExcelDate(nc.data) >= state.filters.tableStart);
-        }
-        if (state.filters.tableEnd) {
-            tableData = tableData.filter(nc => formatExcelDate(nc.data) <= state.filters.tableEnd);
+        if (state.filters.date) {
+            tableData = tableData.filter(nc => formatExcelDate(nc.data) === state.filters.date);
+        } else {
+            if (state.filters.tableStart) {
+                tableData = tableData.filter(nc => formatExcelDate(nc.data) >= state.filters.tableStart);
+            }
+            if (state.filters.tableEnd) {
+                tableData = tableData.filter(nc => formatExcelDate(nc.data) <= state.filters.tableEnd);
+            }
         }
 
         // Filtro por status tab
@@ -636,9 +640,9 @@ document.addEventListener('DOMContentLoaded', () => {
             type: 'doughnut',
             data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 0 }] },
             options: { 
-                cutout: '70%', 
-                layout: { padding: 25 },
-                plugins: { legend: { position: 'bottom', align: 'center', labels: { color: '#94a3b8', font: { size: 11 }, padding: 15 } } }, 
+                cutout: '65%', 
+                layout: { padding: 15 },
+                plugins: { legend: { position: 'bottom', align: 'center', labels: { color: '#94a3b8', font: { size: 11 }, padding: 10 } } }, 
                 maintainAspectRatio: false,
                 onClick: (event, elements) => {
                     if (elements.length > 0) {
@@ -837,8 +841,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         state.charts.line.update();
 
-        // Calculate Trend Data (Linear Regression of Total NCs per day)
-        const totalPerDay = sortedDays.map(d => days[d].CONFORME + days[d].PENDENTE + days[d].DIVERGENCIA + days[d].REINCIDENTE);
+        // Calculate Trend Data (Linear Regression of PENDENTE + DIVERGENCIA per day)
+        const esquecimentosPerDay = sortedDays.map(d => days[d].PENDENTE + days[d].DIVERGENCIA);
         
         function calculateTrendLine(dataPoints) {
             let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
@@ -855,11 +859,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return dataPoints.map((_, i) => slope * i + intercept);
         }
 
-        const trendData = calculateTrendLine(totalPerDay);
+        const trendData = calculateTrendLine(esquecimentosPerDay);
         
         let avg = 0;
-        if (totalPerDay.length > 0) {
-            avg = totalPerDay.reduce((a, b) => a + b, 0) / totalPerDay.length;
+        if (esquecimentosPerDay.length > 0) {
+            avg = esquecimentosPerDay.reduce((a, b) => a + b, 0) / esquecimentosPerDay.length;
         }
         document.getElementById('trendAvg').textContent = avg.toFixed(1);
         
@@ -868,10 +872,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const first = trendData[0];
             const last = trendData[trendData.length - 1];
             if (last > first + 0.1) {
-                trendStatusEl.textContent = 'Em Alta ⚠️';
+                trendStatusEl.textContent = 'Aumentando ⚠️';
                 trendStatusEl.style.color = '#ef4444';
             } else if (last < first - 0.1) {
-                trendStatusEl.textContent = 'Em Queda 📉';
+                trendStatusEl.textContent = 'Diminuindo 📉';
                 trendStatusEl.style.color = '#10b981';
             } else {
                 trendStatusEl.textContent = 'Estável ➡️';
@@ -896,11 +900,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     tension: 0.1
                 },
                 {
-                    label: 'Real (Total)',
-                    data: totalPerDay,
-                    borderColor: 'rgba(148, 163, 184, 0.4)',
+                    label: 'Esquecimentos Reais',
+                    data: esquecimentosPerDay,
+                    borderColor: 'rgba(239, 68, 68, 0.4)',
                     borderWidth: 1,
-                    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
                     fill: true,
                     tension: 0.4,
                     pointRadius: 2
