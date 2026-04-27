@@ -607,9 +607,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 });
             }
+        };
+
         const verticalLinePlugin = {
             id: 'verticalLine',
             afterDraw: chart => {
+                if (chart.config.type !== 'line') return;
                 if (chart.tooltip?._active?.length) {
                     let x = chart.tooltip._active[0].element.x;
                     let yAxis = chart.scales.y;
