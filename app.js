@@ -168,6 +168,105 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    tabelaNCs.addEventListener('click', (e) => {
+        const tr = e.target.closest('tr.nc-row');
+        if (!tr) return;
+        
+        let next = tr.nextElementSibling;
+        if (next && next.classList.contains('expanded-content')) {
+            next.style.display = next.style.display === 'none' ? 'table-row' : 'none';
+            return;
+        }
+        
+        const seller = tr.dataset.seller;
+        if (!seller || seller === '---') return;
+        
+        const expandedTr = document.createElement('tr');
+        expandedTr.className = 'expanded-content';
+        const canvasId = `chart-seller-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+        
+        expandedTr.innerHTML = `
+            <td colspan="8" style="padding: 0;">
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="color: #0ea5e9; font-size: 0.9rem; margin: 0;"><i data-lucide="trending-down" style="width:14px; margin-right:4px;"></i> Frequência de Esquecimento - ${seller}</h4>
+                    </div>
+                    <div style="height: 160px; position: relative;">
+                        <canvas id="${canvasId}"></canvas>
+                    </div>
+                </div>
+            </td>
+        `;
+        tr.parentNode.insertBefore(expandedTr, tr.nextSibling);
+        if (window.lucide) window.lucide.createIcons();
+        renderSellerTrendChart(seller, document.getElementById(canvasId));
+    });
+
+    function renderSellerTrendChart(seller, canvas) {
+        const days = {};
+        state.dataPessoal.forEach(nc => {
+            if(nc.vendedor !== seller) return;
+            const day = formatExcelDate(nc.data);
+            if (!day) return;
+            if (!days[day]) days[day] = 0;
+            
+            const g = state.dataGeral.find(item => item.pedido.toString() == nc.pedido.toString());
+            const s = computeStatus(nc, g);
+            if (s === 'PENDENTE' || s === 'DIVERGENCIA') {
+                days[day]++;
+            }
+        });
+        
+        const sortedDays = Object.keys(days).sort();
+        const data = sortedDays.map(d => days[d]);
+        
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+        const n = data.length;
+        let trendData = [];
+        if (n > 0) {
+            for (let i = 0; i < n; i++) {
+                sumX += i; sumY += data[i]; sumXY += i * data[i]; sumX2 += i * i;
+            }
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            trendData = data.map((_, i) => slope * i + intercept);
+        }
+        
+        new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: sortedDays.map(d => d.split('-').slice(1).reverse().join('/')),
+                datasets: [
+                    {
+                        label: 'Tendência',
+                        data: trendData,
+                        borderColor: '#0ea5e9',
+                        borderDash: [5, 5],
+                        borderWidth: 2,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Esquecimentos',
+                        data: data,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } },
+                    y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 }, stepSize: 1, precision: 0 } }
+                }
+            }
+        });
+    }
+
     function readDataFile(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -514,7 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             return `
-                <tr>
+                <tr class="nc-row" data-seller="${nc.vendedor || '---'}" style="cursor: pointer;" title="Clique para ver Frequência de Esquecimento">
                     <td style="font-weight: 700;">${nc.pedido || '---'}</td>
                     <td>${nc.vendedor || '---'}</td>
                     <td style="font-family: monospace;">${nc.codigo || '---'}</td>
@@ -677,21 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 interaction: { mode: 'index', intersect: false },
                 plugins: { 
                     legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 10 } } },
-                    tooltip: {
-                        callbacks: {
-                            afterBody: function(context) {
-                                const index = context[0].dataIndex;
-                                const label = state.charts.line.data.labels[index];
-                                const dayKey = label.split('/').reverse().join('-');
-                                const sellers = state.lineSellersData[dayKey] || {};
-                                let text = ['','Vendedores neste dia:'];
-                                for (let s in sellers) {
-                                    text.push(`- ${s}: ${sellers[s]}`);
-                                }
-                                return text;
-                            }
-                        }
-                    }
+                    tooltip: { mode: 'index', intersect: false }
                 }, 
                 scales: { y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } }, x: { grid: { display: false }, ticks: { color: '#64748b' } } }, 
                 maintainAspectRatio: false,
@@ -772,6 +857,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateCharts(metricData) {
+        const baseSellerCounts = {};
+        state.dataPessoal.forEach(nc => {
+            const seller = nc.vendedor || 'Desconhecido';
+            baseSellerCounts[seller] = (baseSellerCounts[seller] || 0) + 1;
+        });
+        const sellerColors = {};
+        const colorsList = ['#3b82f6', '#8b5cf6', '#10b981', '#f97316', '#ef4444', '#ec4899', '#06b6d4', '#eab308'];
+        Object.keys(baseSellerCounts).forEach((seller, i) => {
+            sellerColors[seller] = colorsList[i % colorsList.length];
+        });
+
         // Pie Chart: Panorama de Vendas Atual
         const showingStatuses = state.filters.selectedSellers.length === 1;
         state.charts.pie.showingSellers = !showingStatuses;
@@ -785,9 +881,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             state.charts.pie.data.labels = Object.keys(sellerCounts);
             state.charts.pie.data.datasets[0].data = Object.values(sellerCounts);
-            
-            const colors = ['#3b82f6', '#8b5cf6', '#10b981', '#f97316', '#ef4444', '#ec4899', '#06b6d4', '#eab308'];
-            state.charts.pie.data.datasets[0].backgroundColor = Object.keys(sellerCounts).map((_, i) => colors[i % colors.length]);
+            state.charts.pie.data.datasets[0].backgroundColor = Object.keys(sellerCounts).map(seller => sellerColors[seller] || '#64748b');
         } else {
             let counts = { CONFORME: 0, PENDENTE: 0, DIVERGENCIA: 0, REINCIDENTE: 0 };
             metricData.forEach(nc => {
@@ -822,22 +916,33 @@ document.addEventListener('DOMContentLoaded', () => {
             const s = computeStatus(nc, g);
             days[day][s]++;
             
-            const seller = nc.vendedor || 'Desc.';
+            const seller = nc.vendedor || 'Desconhecido';
             days[day].sellers[seller] = (days[day].sellers[seller] || 0) + 1;
         });
 
         const sortedDays = Object.keys(days).sort();
         state.lineSellersData = {};
-        sortedDays.forEach(d => { state.lineSellersData[d] = days[d].sellers; });
+        
+        let allSellers = new Set();
+        sortedDays.forEach(d => { 
+            state.lineSellersData[d] = days[d].sellers; 
+            Object.keys(days[d].sellers).forEach(s => allSellers.add(s));
+        });
         
         state.charts.line.data.labels = sortedDays.map(d => d.split('-').slice(1).reverse().join('/'));
         
-        state.charts.line.data.datasets = [
-            { label: 'Conforme', data: sortedDays.map(d => days[d].CONFORME), borderColor: '#10b981', backgroundColor: 'transparent', tension: 0.4 },
-            { label: 'Pendente', data: sortedDays.map(d => days[d].PENDENTE), borderColor: '#ef4444', backgroundColor: 'transparent', tension: 0.4 },
-            { label: 'Divergência', data: sortedDays.map(d => days[d].DIVERGENCIA), borderColor: '#f97316', backgroundColor: 'transparent', tension: 0.4 },
-            { label: 'Reincidente', data: sortedDays.map(d => days[d].REINCIDENTE), borderColor: '#ec4899', backgroundColor: 'transparent', tension: 0.4 }
-        ];
+        const datasets = Array.from(allSellers).map(seller => {
+            return {
+                label: seller,
+                data: sortedDays.map(d => days[d].sellers[seller] || 0),
+                borderColor: sellerColors[seller] || '#64748b',
+                backgroundColor: 'transparent',
+                tension: 0.4,
+                borderWidth: 2
+            };
+        });
+        
+        state.charts.line.data.datasets = datasets;
         
         state.charts.line.update();
 
