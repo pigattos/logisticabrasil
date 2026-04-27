@@ -635,18 +635,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!showingStatuses) {
             const sellerCounts = {};
-            let totalNCs = 0;
             metricData.forEach(nc => {
                 const seller = nc.vendedor || 'Desconhecido';
                 sellerCounts[seller] = (sellerCounts[seller] || 0) + 1;
-                totalNCs++;
             });
             
-            state.charts.pie.data.labels = Object.keys(sellerCounts).map(seller => {
-                const count = sellerCounts[seller];
-                const pct = totalNCs > 0 ? Math.round((count / totalNCs) * 100) : 0;
-                return `${seller} (${pct}%)`;
-            });
+            state.charts.pie.data.labels = Object.keys(sellerCounts);
             state.charts.pie.data.datasets[0].data = Object.values(sellerCounts);
             
             const colors = ['#3b82f6', '#8b5cf6', '#10b981', '#f97316', '#ef4444', '#ec4899', '#06b6d4', '#eab308'];
@@ -675,29 +669,10 @@ document.addEventListener('DOMContentLoaded', () => {
         state.charts.pie.update();
 
         // Line chart (Evolução)
-        // Ignora o filtro de Data para mostrar sempre a evolução completa do período
-        let lineData = state.dataPessoal;
-        if (state.filters.selectedSellers.length > 0) {
-            lineData = lineData.filter(nc => state.filters.selectedSellers.includes(nc.vendedor));
-        }
-        if (state.filters.status !== 'TODOS') {
-            lineData = lineData.filter(nc => {
-                const g = state.dataGeral.find(item => item.pedido.toString() == nc.pedido.toString());
-                const s = computeStatus(nc, g);
-                return s === state.filters.status;
-            });
-        }
-
         const days = {};
-        let minDate = null;
-        let maxDate = null;
-
-        lineData.forEach(nc => {
+        metricData.forEach(nc => {
             const day = formatExcelDate(nc.data);
             if (!day) return;
-            if (!minDate || day < minDate) minDate = day;
-            if (!maxDate || day > maxDate) maxDate = day;
-            
             if (!days[day]) days[day] = { CONFORME: 0, PENDENTE: 0, DIVERGENCIA: 0, REINCIDENTE: 0, sellers: {} };
             
             const g = state.dataGeral.find(item => item.pedido.toString() == nc.pedido.toString());
@@ -707,20 +682,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const seller = nc.vendedor || 'Desc.';
             days[day].sellers[seller] = (days[day].sellers[seller] || 0) + 1;
         });
-
-        // Preencher dias vazios entre o mínimo e o máximo para a linha ser contínua
-        if (minDate && maxDate) {
-            let curr = new Date(minDate + "T12:00:00");
-            const end = new Date(maxDate + "T12:00:00");
-            while (curr <= end) {
-                const year = curr.getFullYear();
-                const month = String(curr.getMonth() + 1).padStart(2, '0');
-                const dayStr = String(curr.getDate()).padStart(2, '0');
-                const d = `${year}-${month}-${dayStr}`;
-                if (!days[d]) days[d] = { CONFORME: 0, PENDENTE: 0, DIVERGENCIA: 0, REINCIDENTE: 0, sellers: {} };
-                curr.setDate(curr.getDate() + 1);
-            }
-        }
 
         const sortedDays = Object.keys(days).sort();
         state.lineSellersData = {};
