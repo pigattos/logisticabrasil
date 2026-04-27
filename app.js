@@ -67,6 +67,34 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const btnClearFilters = document.getElementById('btnClearFilters');
+    if (btnClearFilters) {
+        btnClearFilters.addEventListener('click', () => {
+            state.filters.date = '';
+            document.getElementById('dateFilter').value = '';
+            
+            state.filters.selectedSellers = [];
+            Array.from(document.querySelectorAll('#sellerDropdown input[type="checkbox"]')).forEach(cb => cb.checked = false);
+            document.getElementById('selectedSellersText').textContent = "Todos os Vendedores";
+            
+            state.filters.statusTab = 'TODOS';
+            document.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
+            const defaultTab = document.querySelector('.status-tab[data-status="TODOS"]');
+            if (defaultTab) defaultTab.classList.add('active');
+
+            state.filters.tableStart = '';
+            state.filters.tableEnd = '';
+            document.getElementById('tableStartDate').value = '';
+            document.getElementById('tableEndDate').value = '';
+
+            if (state.charts.pie) {
+                state.charts.pie.showingSellers = false;
+            }
+            
+            applyFilters();
+        });
+    }
+
     document.addEventListener('click', (e) => {
         if (!sellerDropdown.contains(e.target) && e.target !== btnSellerFilter) {
             sellerDropdown.classList.remove('active');
@@ -534,14 +562,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.save();
             }
         };
-        Chart.register(centerTextPlugin);
+
+        const outlabelsPlugin = {
+            id: 'outlabels',
+            afterDraw: function(chart) {
+                if (chart.config.type !== 'doughnut') return;
+                const ctx = chart.ctx;
+                chart.data.datasets.forEach((dataset, i) => {
+                    chart.getDatasetMeta(i).data.forEach((element, index) => {
+                        const dataValue = dataset.data[index];
+                        if (dataValue === 0) return;
+                        
+                        const total = dataset.data.reduce((acc, val) => acc + val, 0);
+                        const pct = Math.round((dataValue / total) * 100) + '%';
+                        
+                        const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
+                        const outerRadius = element.outerRadius;
+                        const x = chart.chartArea.left + chart.chartArea.width / 2;
+                        const y = chart.chartArea.top + chart.chartArea.height / 2;
+                        
+                        const x1 = x + Math.cos(midAngle) * outerRadius;
+                        const y1 = y + Math.sin(midAngle) * outerRadius;
+                        
+                        const lineLength = 12;
+                        const x2 = x + Math.cos(midAngle) * (outerRadius + lineLength);
+                        const y2 = y + Math.sin(midAngle) * (outerRadius + lineLength);
+                        
+                        const isRight = x2 > x;
+                        const x3 = isRight ? x2 + 8 : x2 - 8;
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.lineTo(x3, y2);
+                        ctx.strokeStyle = dataset.backgroundColor[index];
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+                        
+                        ctx.font = "bold 11px Inter";
+                        ctx.fillStyle = dataset.backgroundColor[index];
+                        ctx.textBaseline = "middle";
+                        ctx.textAlign = isRight ? "left" : "right";
+                        ctx.fillText(pct, isRight ? x3 + 3 : x3 - 3, y2);
+                    });
+                });
+            }
+        };
+        Chart.register(centerTextPlugin, outlabelsPlugin);
 
         const ctxPie = document.getElementById('pieChart').getContext('2d');
         state.charts.pie = new Chart(ctxPie, {
             type: 'doughnut',
             data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 0 }] },
             options: { 
-                cutout: '80%', 
+                cutout: '75%', 
+                layout: { padding: 30 },
                 plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 } } } }, 
                 maintainAspectRatio: false,
                 onClick: (event, elements) => {
@@ -599,8 +674,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 scales: { y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } }, x: { grid: { display: false }, ticks: { color: '#64748b' } } }, 
                 maintainAspectRatio: false,
                 onClick: (event, elements) => {
-                    if (elements.length > 0) {
-                        const index = elements[0].index;
+                    const chart = state.charts.line;
+                    if (!chart) return;
+                    
+                    const xAxis = chart.scales.x;
+                    const yAxis = chart.scales.y;
+                    const eY = event.y !== undefined ? event.y : event.native.offsetY;
+                    const eX = event.x !== undefined ? event.x : event.native.offsetX;
+                    
+                    // Se clicou na área do eixo X (ou próximo das labels) ou num ponto da linha
+                    if (eY >= xAxis.top || elements.length > 0) {
+                        let index;
+                        if (elements.length > 0) {
+                            index = elements[0].index;
+                        } else {
+                            const dataX = xAxis.getValueForPixel(eX);
+                            if (dataX === undefined) return;
+                            index = Math.round(dataX);
+                        }
+                        
                         const dayKey = Object.keys(state.lineSellersData)[index];
                         if (dayKey) {
                             document.getElementById('dateFilter').value = dayKey;
