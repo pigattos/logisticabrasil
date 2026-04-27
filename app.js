@@ -508,9 +508,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 onClick: (event, elements) => {
                     if (elements.length > 0) {
                         const index = elements[0].index;
-                        const label = state.charts.pie.data.labels[index];
+                        let label = state.charts.pie.data.labels[index];
                         
                         if (state.charts.pie.showingSellers) {
+                            // Extrai apenas o nome do vendedor (remove a porcentagem se houver)
+                            label = label.split(' (')[0];
+                            
                             // Filter by this seller
                             state.filters.selectedSellers = [label];
                             Array.from(sellerDropdown.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
