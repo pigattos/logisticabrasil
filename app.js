@@ -497,6 +497,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function initCharts() {
+        // Plugin to draw text in the center of the doughnut chart
+        const centerTextPlugin = {
+            id: 'centerText',
+            beforeDraw: function(chart) {
+                if (chart.config.type !== 'doughnut') return;
+                const ctx = chart.ctx;
+                const width = chart.width;
+                const height = chart.height;
+                ctx.restore();
+
+                let textLines = [];
+                if (state.filters.selectedSellers.length > 0) {
+                    if (state.filters.selectedSellers.length <= 2) {
+                        textLines = state.filters.selectedSellers;
+                    } else {
+                        textLines = [`${state.filters.selectedSellers.length} Vendedores`];
+                    }
+                } else {
+                    textLines = ["Todos"];
+                }
+
+                ctx.font = "bold 14px Inter";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = "#94a3b8";
+
+                const lineHeight = 18;
+                const totalHeight = textLines.length * lineHeight;
+                const startY = (height - totalHeight) / 2 + (lineHeight / 2);
+
+                textLines.forEach((line, i) => {
+                    const textX = Math.round((width - ctx.measureText(line).width) / 2);
+                    const textY = startY + (i * lineHeight);
+                    ctx.fillText(line, textX, textY);
+                });
+                ctx.save();
+            }
+        };
+        Chart.register(centerTextPlugin);
+
         const ctxPie = document.getElementById('pieChart').getContext('2d');
         state.charts.pie = new Chart(ctxPie, {
             type: 'doughnut',
@@ -562,10 +601,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 onClick: (event, elements) => {
                     if (elements.length > 0) {
                         const index = elements[0].index;
-                        const label = state.charts.line.data.labels[index];
-                        if (label) {
-                            const [d, m, y] = label.split('/');
-                            const dayKey = `${y}-${m}-${d}`;
+                        const dayKey = Object.keys(state.lineSellersData)[index];
+                        if (dayKey) {
                             document.getElementById('dateFilter').value = dayKey;
                             state.filters.date = dayKey;
                             applyFilters();
@@ -638,10 +675,29 @@ document.addEventListener('DOMContentLoaded', () => {
         state.charts.pie.update();
 
         // Line chart (Evolução)
+        // Ignora o filtro de Data para mostrar sempre a evolução completa do período
+        let lineData = state.dataPessoal;
+        if (state.filters.selectedSellers.length > 0) {
+            lineData = lineData.filter(nc => state.filters.selectedSellers.includes(nc.vendedor));
+        }
+        if (state.filters.status !== 'TODOS') {
+            lineData = lineData.filter(nc => {
+                const g = state.dataGeral.find(item => item.pedido.toString() == nc.pedido.toString());
+                const s = computeStatus(nc, g);
+                return s === state.filters.status;
+            });
+        }
+
         const days = {};
-        metricData.forEach(nc => {
+        let minDate = null;
+        let maxDate = null;
+
+        lineData.forEach(nc => {
             const day = formatExcelDate(nc.data);
             if (!day) return;
+            if (!minDate || day < minDate) minDate = day;
+            if (!maxDate || day > maxDate) maxDate = day;
+            
             if (!days[day]) days[day] = { CONFORME: 0, PENDENTE: 0, DIVERGENCIA: 0, REINCIDENTE: 0, sellers: {} };
             
             const g = state.dataGeral.find(item => item.pedido.toString() == nc.pedido.toString());
@@ -651,6 +707,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const seller = nc.vendedor || 'Desc.';
             days[day].sellers[seller] = (days[day].sellers[seller] || 0) + 1;
         });
+
+        // Preencher dias vazios entre o mínimo e o máximo para a linha ser contínua
+        if (minDate && maxDate) {
+            let curr = new Date(minDate + "T12:00:00");
+            const end = new Date(maxDate + "T12:00:00");
+            while (curr <= end) {
+                const year = curr.getFullYear();
+                const month = String(curr.getMonth() + 1).padStart(2, '0');
+                const dayStr = String(curr.getDate()).padStart(2, '0');
+                const d = `${year}-${month}-${dayStr}`;
+                if (!days[d]) days[d] = { CONFORME: 0, PENDENTE: 0, DIVERGENCIA: 0, REINCIDENTE: 0, sellers: {} };
+                curr.setDate(curr.getDate() + 1);
+            }
+        }
 
         const sortedDays = Object.keys(days).sort();
         state.lineSellersData = {};
