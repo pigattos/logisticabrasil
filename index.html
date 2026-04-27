@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NCs Dashboard - Premium Dark</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (Excel Support) -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+    <aside>
+        <div class="logo-section">
+            <i data-lucide="clipboard-check" class="logo-icon" size="32"></i>
+            <span class="logo-text">NCs Dashboard</span>
+        </div>
+
+        <nav>
+            <a href="#" class="nav-item active">
+                <i data-lucide="layout-grid" size="20"></i>
+                <span>Visão Geral</span>
+            </a>
+            <a href="#" class="nav-item">
+                <i data-lucide="list" size="20"></i>
+                <span>Todas as NCs</span>
+            </a>
+            <a href="#" class="nav-item">
+                <i data-lucide="bar-chart-3" size="20"></i>
+                <span>Relatórios</span>
+            </a>
+            <a href="#" class="nav-item">
+                <i data-lucide="settings" size="20"></i>
+                <span>Configurações</span>
+            </a>
+        </nav>
+
+        <div class="upload-area">
+            <p class="upload-title">Sincronizar Arquivos</p>
+            
+            <div class="upload-group">
+                <label class="upload-input-label">
+                    <span>ARQUIVO PRINCIPAL (Base 2026)</span>
+                    <input type="file" id="filePessoal" class="custom-file-input" accept=".xlsx, .xls, .csv">
+                </label>
+
+                <label class="upload-input-label">
+                    <span>ARQUIVO NC GERAL (Não Conformidade)</span>
+                    <input type="file" id="fileGeral" class="custom-file-input" accept=".xlsx, .xls, .csv">
+                </label>
+            </div>
+
+            <button id="btnUpdate" class="btn-sync">
+                <i data-lucide="refresh-cw" size="16"></i>
+                <span>Atualizar Dashboard</span>
+            </button>
+        </div>
+    </aside>
+
+    <main>
+        <header>
+            <div>
+                <h1>Dashboard de NCs</h1>
+                <p>Visão geral das Não Conformidades registradas.</p>
+            </div>
+            <div class="header-actions">
+                <div class="action-box">
+                    <i data-lucide="calendar" size="18"></i>
+                    <input type="date" id="dateFilter" class="date-input">
+                </div>
+                <div class="multi-select-container">
+                    <button id="btnSellerFilter" class="action-box multi-select-trigger">
+                        <i data-lucide="users" size="18"></i>
+                        <span id="selectedSellersText">Todos os Vendedores</span>
+                        <i data-lucide="chevron-down" size="14"></i>
+                    </button>
+                    <div id="sellerDropdown" class="multi-select-dropdown">
+                        <!-- Checkboxes will be here -->
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Metrics Grid -->
+        <section class="metrics-grid">
+            <div class="metric-card blue">
+                <div class="card-header">
+                    <span class="card-title">Total da Base</span>
+                    <div class="card-icon"><i data-lucide="database" size="20"></i></div>
+                </div>
+                <div class="card-value" id="valTotal">0</div>
+                <p class="card-subtext">Total de pedidos na base</p>
+                <div class="card-sparkline"><canvas id="sparkTotal"></canvas></div>
+            </div>
+            
+            <div class="metric-card green">
+                <div class="card-header">
+                    <span class="card-title">Registro Logística</span>
+                    <div class="card-icon"><i data-lucide="truck" size="20"></i></div>
+                </div>
+                <div class="card-value" id="valMim">0</div>
+                <p class="card-subtext" id="percMim">0% do total</p>
+                <div class="card-sparkline"><canvas id="sparkMim"></canvas></div>
+            </div>
+
+            <div class="metric-card purple">
+                <div class="card-header">
+                    <span class="card-title">Conformes</span>
+                    <div class="card-icon"><i data-lucide="check-circle" size="20"></i></div>
+                </div>
+                <div class="card-value" id="valComercial">0</div>
+                <p class="card-subtext" id="percComercial">0% concluído</p>
+                <div class="card-sparkline"><canvas id="sparkComercial"></canvas></div>
+            </div>
+
+            <div class="metric-card orange">
+                <div class="card-header">
+                    <span class="card-title">Pendentes</span>
+                    <div class="card-icon"><i data-lucide="alert-triangle" size="20"></i></div>
+                </div>
+                <div class="card-value" id="valNaoComercial">0</div>
+                <p class="card-subtext" id="percNaoComercial">0% pendente</p>
+                <div class="card-sparkline"><canvas id="sparkNaoComercial"></canvas></div>
+            </div>
+            <div class="metric-card red">
+                <div class="card-header">
+                    <span class="card-title">Reincidentes</span>
+                    <div class="card-icon"><i data-lucide="repeat-2" size="20"></i></div>
+                </div>
+                <div class="card-value" id="valReincidente">0</div>
+                <p class="card-subtext" id="percReincidente">0% reincidente</p>
+                <div class="card-sparkline"><canvas id="sparkReincidente"></canvas></div>
+            </div>
+        </section>
+
+        <!-- Charts Grid -->
+        <section class="charts-grid">
+            <div class="chart-card">
+                <h3>Panorama de Vendas Atual</h3>
+                <div class="chart-container">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Evolução de NCs no Período</h3>
+                <div class="chart-container">
+                    <canvas id="lineChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Table Section -->
+        <section class="table-card">
+            <div class="table-header">
+                <div class="table-title">
+                    <h3>Detalhamento das NCs</h3>
+                    <span class="badge-count" id="badgeCount">0 NCs</span>
+                </div>
+                <div class="table-filters">
+                    <button id="btnExportExcel" class="btn-sync" style="width: auto; padding: 0.35rem 0.875rem; font-size: 0.72rem; background: var(--success); border-radius: 6px;">
+                        <i data-lucide="download" size="14"></i> Exportar
+                    </button>
+                    <div class="status-filter-tabs" id="statusFilterTabs">
+                        <button class="status-tab active" data-status="TODOS">Todos</button>
+                        <button class="status-tab" data-status="CONFORME">Conforme</button>
+                        <button class="status-tab" data-status="PENDENTE">Pendente</button>
+                        <button class="status-tab" data-status="DIVERGENCIA">Divergência</button>
+                        <button class="status-tab" data-status="REINCIDENTE">Reincidente</button>
+                    </div>
+                    <div class="range-group">
+                        <label>De: <input type="date" id="tableStartDate" class="date-input-sm"></label>
+                        <label>Até: <input type="date" id="tableEndDate" class="date-input-sm"></label>
+                    </div>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>PEDIDO</th>
+                            <th>VENDEDOR</th>
+                            <th>CODIGO</th>
+                            <th style="text-align: center;">DATA R. LOGISTICA</th>
+                            <th style="text-align: center;">DATA R. VENDAS</th>
+                            <th>STATUS</th>
+                            <th>DIVERGENCIA</th>
+                            <th>CLIENTE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaNCs">
+                        <tr>
+                            <td colspan="6" class="empty-state">
+                                Aguardando sincronização de arquivos...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+    <script>
+        // Initialize icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>

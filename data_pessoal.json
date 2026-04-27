@@ -1,0 +1,23 @@
+[
+    {
+        "id": "NC001",
+        "data": "31/05/2024",
+        "descricao": "Produto com avaria na embalagem",
+        "cliente": "Cliente A / Logística",
+        "setor": "Logística"
+    },
+    {
+        "id": "NC002",
+        "data": "30/05/2024",
+        "descricao": "Atraso na entrega do pedido",
+        "cliente": "Cliente B / Expedição",
+        "setor": "Expedição"
+    },
+    {
+        "id": "NC004",
+        "data": "28/05/2024",
+        "descricao": "Falha na comunicação com o cliente",
+        "cliente": "Cliente D / Atendimento",
+        "setor": "Atendimento"
+    }
+]
