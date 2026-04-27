@@ -607,17 +607,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 });
             }
+        const verticalLinePlugin = {
+            id: 'verticalLine',
+            afterDraw: chart => {
+                if (chart.tooltip?._active?.length) {
+                    let x = chart.tooltip._active[0].element.x;
+                    let yAxis = chart.scales.y;
+                    let ctx = chart.ctx;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(x, yAxis.top);
+                    ctx.lineTo(x, yAxis.bottom);
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
         };
-        Chart.register(centerTextPlugin, outlabelsPlugin);
+        Chart.register(centerTextPlugin, outlabelsPlugin, verticalLinePlugin);
 
         const ctxPie = document.getElementById('pieChart').getContext('2d');
         state.charts.pie = new Chart(ctxPie, {
             type: 'doughnut',
             data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 0 }] },
             options: { 
-                cutout: '75%', 
-                layout: { padding: 30 },
-                plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 } } } }, 
+                cutout: '70%', 
+                layout: { padding: 25 },
+                plugins: { legend: { position: 'bottom', align: 'center', labels: { color: '#94a3b8', font: { size: 11 }, padding: 15 } } }, 
                 maintainAspectRatio: false,
                 onClick: (event, elements) => {
                     if (elements.length > 0) {
@@ -625,17 +643,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         let label = state.charts.pie.data.labels[index];
                         
                         if (state.charts.pie.showingSellers) {
-                            // Extrai apenas o nome do vendedor (remove a porcentagem se houver)
                             label = label.split(' (')[0];
-                            
-                            // Filter by this seller
                             state.filters.selectedSellers = [label];
                             Array.from(sellerDropdown.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
                                 cb.checked = (cb.value === label);
                             });
                             selectedSellersText.textContent = label;
                         } else {
-                            // Clear seller filter
                             state.filters.selectedSellers = [];
                             Array.from(sellerDropdown.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
                                 cb.checked = false;
@@ -653,6 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
             type: 'line',
             data: { labels: [], datasets: [] },
             options: { 
+                interaction: { mode: 'index', intersect: false },
                 plugins: { 
                     legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 10 } } },
                     tooltip: {
@@ -703,6 +718,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+
+        // Gráfico de Tendência (Verso do Card)
+        const ctxTrend = document.getElementById('trendChart').getContext('2d');
+        state.charts.trend = new Chart(ctxTrend, {
+            type: 'line',
+            data: { labels: [], datasets: [] },
+            options: {
+                plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                scales: { 
+                    y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } }, 
+                    x: { grid: { display: false }, ticks: { color: '#64748b' } } 
+                },
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false }
+            }
+        });
+        
+        // Listeners do Card Flip
+        const btnFlipCard = document.getElementById('btnFlipCard');
+        const btnFlipBack = document.getElementById('btnFlipBack');
+        const evolucaoContainer = document.getElementById('evolucaoContainer');
+        if (btnFlipCard && evolucaoContainer) {
+            btnFlipCard.addEventListener('click', () => {
+                evolucaoContainer.classList.add('flipped');
+            });
+            btnFlipBack.addEventListener('click', () => {
+                evolucaoContainer.classList.remove('flipped');
+            });
+        }
 
         initSpark('sparkTotal', '#3b82f6');
         initSpark('sparkComercial', '#10b981');
@@ -789,6 +833,78 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
         
         state.charts.line.update();
+
+        // Calculate Trend Data (Linear Regression of Total NCs per day)
+        const totalPerDay = sortedDays.map(d => days[d].CONFORME + days[d].PENDENTE + days[d].DIVERGENCIA + days[d].REINCIDENTE);
+        
+        function calculateTrendLine(dataPoints) {
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+            const n = dataPoints.length;
+            if(n === 0) return [];
+            for (let i = 0; i < n; i++) {
+                sumX += i;
+                sumY += dataPoints[i];
+                sumXY += i * dataPoints[i];
+                sumX2 += i * i;
+            }
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            return dataPoints.map((_, i) => slope * i + intercept);
+        }
+
+        const trendData = calculateTrendLine(totalPerDay);
+        
+        let avg = 0;
+        if (totalPerDay.length > 0) {
+            avg = totalPerDay.reduce((a, b) => a + b, 0) / totalPerDay.length;
+        }
+        document.getElementById('trendAvg').textContent = avg.toFixed(1);
+        
+        const trendStatusEl = document.getElementById('trendStatus');
+        if (trendData.length > 1) {
+            const first = trendData[0];
+            const last = trendData[trendData.length - 1];
+            if (last > first + 0.1) {
+                trendStatusEl.textContent = 'Em Alta ⚠️';
+                trendStatusEl.style.color = '#ef4444';
+            } else if (last < first - 0.1) {
+                trendStatusEl.textContent = 'Em Queda 📉';
+                trendStatusEl.style.color = '#10b981';
+            } else {
+                trendStatusEl.textContent = 'Estável ➡️';
+                trendStatusEl.style.color = '#94a3b8';
+            }
+        } else {
+            trendStatusEl.textContent = 'N/A';
+            trendStatusEl.style.color = '#64748b';
+        }
+        
+        if (state.charts.trend) {
+            state.charts.trend.data.labels = state.charts.line.data.labels;
+            state.charts.trend.data.datasets = [
+                { 
+                    label: 'Tendência', 
+                    data: trendData, 
+                    borderColor: '#0ea5e9', 
+                    borderWidth: 3, 
+                    borderDash: [5, 5],
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    tension: 0.1
+                },
+                {
+                    label: 'Real (Total)',
+                    data: totalPerDay,
+                    borderColor: 'rgba(148, 163, 184, 0.4)',
+                    borderWidth: 1,
+                    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 2
+                }
+            ];
+            state.charts.trend.update();
+        }
 
         Object.keys(state.charts.sparks).forEach(id => {
             const chart = state.charts.sparks[id];

@@ -154,10 +154,42 @@
                     <canvas id="pieChart"></canvas>
                 </div>
             </div>
-            <div class="chart-card">
-                <h3>Evolução de NCs no Período</h3>
-                <div class="chart-container">
-                    <canvas id="lineChart"></canvas>
+            <div class="chart-card flip-container" id="evolucaoContainer">
+                <div class="flipper" id="evolucaoFlipper">
+                    <!-- Frente do Card: Evolução Original -->
+                    <div class="front">
+                        <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3>Evolução de NCs no Período</h3>
+                            <button id="btnFlipCard" class="btn-icon" title="Ver Tendência">
+                                <i data-lucide="trending-up" size="18"></i>
+                            </button>
+                        </div>
+                        <div style="height: 260px; position: relative;">
+                            <canvas id="lineChart"></canvas>
+                        </div>
+                    </div>
+                    <!-- Verso do Card: Tendência -->
+                    <div class="back">
+                        <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3 style="color: #0ea5e9;">Tendência & Média Diária</h3>
+                            <button id="btnFlipBack" class="btn-icon" title="Voltar à Evolução">
+                                <i data-lucide="arrow-left" size="18"></i>
+                            </button>
+                        </div>
+                        <div class="trend-stats">
+                            <div class="trend-stat-box">
+                                <span>Média Diária de NCs</span>
+                                <strong id="trendAvg">0.0</strong>
+                            </div>
+                            <div class="trend-stat-box">
+                                <span>Comportamento</span>
+                                <strong id="trendStatus">Estável</strong>
+                            </div>
+                        </div>
+                        <div style="height: 180px; position: relative;">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
