@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NCs Dashboard - Premium Dark</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=1.6">
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,11 +30,11 @@
         </a>
 
         <nav>
-            <a href="#" class="nav-item active">
+            <a href="#" class="nav-item active" id="navOverview">
                 <i data-lucide="layout-grid" size="20"></i>
-                <span>Visão Geral</span>
+                <span>NC nas NC</span>
             </a>
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" id="navAllNcs">
                 <i data-lucide="list" size="20"></i>
                 <span>Todas as NCs</span>
             </a>
@@ -42,7 +42,7 @@
                 <i data-lucide="bar-chart-3" size="20"></i>
                 <span>Relatórios</span>
             </a>
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" id="navSettings">
                 <i data-lucide="settings" size="20"></i>
                 <span>Configurações</span>
             </a>
@@ -66,6 +66,7 @@
     </aside>
 
     <main>
+        <div class="bg-screw"></div>
         <header>
             <div>
                 <h1>Dashboard de NCs</h1>
@@ -87,14 +88,21 @@
                     </div>
                 </div>
 
+                <button id="btnSwitchView" class="action-box btn-impact-mode" title="Mudar para Visão de Impacto">
+                    <i data-lucide="zap" size="18" style="color: #FFD700;"></i>
+                    <span id="viewModeText">Visão de Impacto</span>
+                </button>
+
                 <button id="btnClearFilters" class="btn-clear-filters">
                     <i data-lucide="filter-x" size="16"></i> Limpar Filtros
                 </button>
             </div>
         </header>
 
-        <!-- Metrics Grid -->
-        <section class="metrics-grid">
+        <!-- Dashboard Content Container (To be shattered/hidden) -->
+        <div id="dashboardContent">
+            <!-- Metrics Grid -->
+            <section class="metrics-grid">
             <div class="metric-card blue" data-tooltip="Todos os registros feitos pela logística">
                 <div class="card-header">
                     <span class="card-title">Total da Base</span>
@@ -241,10 +249,136 @@
                     </tbody>
                 </table>
             </div>
+        </div> <!-- End dashboardContent -->
+
+        <!-- Impact View (Hidden by default) -->
+        <section id="impactView" class="impact-hidden" style="display: none;">
+            <div class="impact-header">
+                <h2 class="impact-title">Análise de Impacto Empresarial</h2>
+                <p class="impact-subtitle">Reflexão sobre retrabalho e eficiência operacional</p>
+            </div>
+
+            <div class="impact-grid">
+                <!-- Top Problematic Codes -->
+                <div class="impact-card critical-codes">
+                    <div class="impact-card-header">
+                        <i data-lucide="unplug" size="24" class="impact-icon-red"></i>
+                        <h3>Itens Reincidentes (Gargalos)</h3>
+                    </div>
+                    <div id="criticalCodesList" class="impact-list">
+                        <!-- Items injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Affected Clients -->
+                <div class="impact-card affected-clients">
+                    <div class="impact-card-header">
+                        <i data-lucide="users" size="24" class="impact-icon-blue"></i>
+                        <h3>Clientes Impactados pelo Retrabalho</h3>
+                    </div>
+                    <div id="affectedClientsList" class="impact-list">
+                        <!-- Items injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Efficiency/Time Loss -->
+                <div class="impact-card efficiency-loss">
+                    <div class="impact-card-header">
+                        <i data-lucide="clock" size="24" class="impact-icon-orange"></i>
+                        <h3>Perda de Eficiência Operacional</h3>
+                    </div>
+                    <div class="efficiency-stats">
+                        <div class="efficiency-stat">
+                            <span class="stat-label">Tempo Estimado de Retrabalho</span>
+                            <span id="timeLostValue" class="stat-value">0h</span>
+                        </div>
+                        <div class="efficiency-stat">
+                            <span class="stat-label">Custo de Oportunidade</span>
+                            <span class="stat-badge high">Alto Impacto</span>
+                        </div>
+                    </div>
+                    <div class="impact-reflexion">
+                        <p>Cada Não Conformidade gera um ciclo de procura, re-conferência e comunicação que consome tempo precioso da equipe.</p>
+                        <ul class="reflexion-list">
+                            <li><i data-lucide="alert-circle" size="14"></i> Itens que voltam em novos pedidos sem correção prévia.</li>
+                            <li><i data-lucide="alert-circle" size="14"></i> Desgaste na relação com o cliente final.</li>
+                            <li><i data-lucide="alert-circle" size="14"></i> Risco de atrasos em toda a cadeia logística.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Analytics View (Todas as NCs / Geral) - Clean & Metallic -->
+        <section id="analyticsView" class="impact-hidden" style="display: none;">
+            <div class="analytics-header">
+                <h2 class="analytics-title">Visão Global de Não Conformidades</h2>
+                <p class="impact-subtitle">Análise consolidada de performance e métricas gerais</p>
+            </div>
+
+            <!-- Status Indicators Row -->
+            <div id="statusIndicators" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; justify-content: space-between;">
+                <!-- Injected by JS -->
+            </div>
+
+            <div class="analytics-grid">
+                <!-- Clientes mais Afetados (List 1) -->
+                <div class="analytics-card" style="grid-row: span 2;">
+                    <h3><i data-lucide="users" size="20"></i> Clientes mais Afetados</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1rem;">Clientes com maior volume de NCs</p>
+                    <div id="topClientsList" class="impact-list">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Situação por Vendedor (List 2) -->
+                <div class="analytics-card" style="grid-row: span 2;">
+                    <h3><i data-lucide="user-check" size="20"></i> Situação por Vendedor</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1rem;">Volume de Pendentes vs Resolvidas</p>
+                    <div id="sellerStatusList" class="impact-list">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Taxa de Resolução (List 3) -->
+                <div class="analytics-card" style="grid-row: span 2;">
+                    <h3><i data-lucide="target" size="20"></i> Taxa de Resolução</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1rem;">Comparativo de Pendências e Soluções</p>
+                    <div id="resolutionRateList" class="impact-list">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Summary Metrics (Metallic Box) -->
+                <div class="analytics-card" style="grid-column: 1 / -1; display: flex; justify-content: space-around; align-items: center; background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent);">
+                    <div id="analyticsSummaryContent" style="display: flex; gap: 3rem; width: 100%; justify-content: space-around;">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings View -->
+        <section id="settingsView" class="impact-hidden" style="display: none;">
+            <div class="analytics-header">
+                <h2 class="analytics-title">Configurações</h2>
+                <p class="impact-subtitle">Gerenciamento do Dashboard Premium</p>
+            </div>
+            <div class="analytics-grid" style="max-width: 600px; margin: 0 auto;">
+                <div class="analytics-card">
+                    <h3><i data-lucide="tool" size="20"></i> Sistema</h3>
+                    <div class="impact-reflexion">
+                        <button id="btnClearCache" class="btn-sync" style="width: 100%; margin-bottom: 15px;">
+                            <i data-lucide="trash-2" size="16"></i> Limpar Cache do Sistema
+                        </button>
+                        <p style="font-size: 12px; color: var(--text-muted);">Versão do Sistema: 5.8 Metallic Edition</p>
+                    </div>
+                </div>
+            </div>
         </section>
     </main>
 
-    <script src="app.js?v=5.1"></script>
+    <script src="app.js?v=5.8"></script>
     <script>
         // Initialize icons
         lucide.createIcons();

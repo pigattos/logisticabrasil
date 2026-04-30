@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     motivo: item.divergencia || ""
                 }));
 
-                // Mapeia as Não Conformidades (Geral)
+                // Mapeia as Não Conformidades da base (Para cruzar dados no Overview)
                 const dataNC = result.dataNC || [];
                 state.dataGeral = dataNC.map(item => ({
                     pedido: item.numero_pedido || "",
@@ -77,12 +77,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     data: item.data_ocorrencia || "",
                     codigo: item.codigo || "",
                     cliente: item.cliente_afetado || "",
-                    motivo: item.titulo || "",
+                    motivo: item.tipo_nao_conformidade || item.titulo || "",
                     status_raw: item.status || ""
                 }));
 
                 console.log("Base Logística:", state.dataPessoal.length);
-                console.log("NCs Geral:", state.dataGeral.length);
+                console.log("NCs Geral (DB):", state.dataGeral.length);
 
                 populateSellersFilter();
                 applyFilters();
@@ -536,7 +536,7 @@ const ctxPie = document.getElementById('pieChart').getContext('2d');
                     legend: { 
                         position: 'bottom', 
                         align: 'center', 
-                        labels: { color: '#94a3b8', font: { size: 12 }, padding: 15, boxWidth: 12 } 
+                        labels: { color: '#71717a', font: { size: 12 }, padding: 15, boxWidth: 12 } 
                     } 
                 }, 
                 maintainAspectRatio: false,
@@ -577,7 +577,7 @@ const ctxPie = document.getElementById('pieChart').getContext('2d');
             options: {
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 10 } } },
+                    legend: { display: true, position: 'top', labels: { color: '#71717a', font: { size: 10 } } },
                     tooltip: {
                         callbacks: {
                             afterBody: function (context) {
@@ -594,7 +594,7 @@ const ctxPie = document.getElementById('pieChart').getContext('2d');
                         }
                     }
                 },
-                scales: { y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } }, x: { grid: { display: false }, ticks: { color: '#64748b' } } },
+                scales: { y: { grid: { color: '#171717' }, ticks: { color: '#71717a' } }, x: { grid: { display: false }, ticks: { color: '#71717a' } } },
                 maintainAspectRatio: false,
                 onClick: (event, elements) => {
                     const chart = state.charts.line;
@@ -635,8 +635,8 @@ const ctxPie = document.getElementById('pieChart').getContext('2d');
             options: {
                 plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
                 scales: {
-                    y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
-                    x: { grid: { display: false }, ticks: { color: '#64748b' } }
+                    y: { grid: { color: '#171717' }, ticks: { color: '#71717a' } },
+                    x: { grid: { display: false }, ticks: { color: '#71717a' } }
                 },
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false }
@@ -656,7 +656,7 @@ const ctxPie = document.getElementById('pieChart').getContext('2d');
             });
         }
 
-        initSpark('sparkTotal', '#3b82f6');
+        initSpark('sparkTotal', '#facc15');
         initSpark('sparkComercial', '#10b981');
         initSpark('sparkNaoComercial', '#ef4444');
         initSpark('sparkDivergencia', '#f97316');
@@ -687,7 +687,7 @@ const ctxPie = document.getElementById('pieChart').getContext('2d');
             state.charts.pie.data.labels = Object.keys(sellerCounts);
             state.charts.pie.data.datasets[0].data = Object.values(sellerCounts);
 
-            const colors = ['#3b82f6', '#8b5cf6', '#10b981', '#f97316', '#ef4444', '#ec4899', '#06b6d4', '#eab308'];
+            const colors = ['#facc15', '#eab308', '#ca8a04', '#a1a1aa', '#71717a', '#52525b', '#3f3f46', '#fef08a'];
             state.charts.pie.data.datasets[0].backgroundColor = Object.keys(sellerCounts).map((_, i) => colors[i % colors.length]);
         } else {
             let counts = { CONFORME: 0, PENDENTE: 0, DIVERGENCIA: 0, REINCIDENTE: 0 };
@@ -793,7 +793,7 @@ const ctxPie = document.getElementById('pieChart').getContext('2d');
                 {
                     label: 'Tendência',
                     data: trendData,
-                    borderColor: '#0ea5e9',
+                    borderColor: '#facc15',
                     borderWidth: 3,
                     borderDash: [5, 5],
                     backgroundColor: 'transparent',
@@ -803,12 +803,13 @@ const ctxPie = document.getElementById('pieChart').getContext('2d');
                 {
                     label: 'Esquecimentos Reais',
                     data: esquecimentosPerDay,
-                    borderColor: 'rgba(239, 68, 68, 0.4)',
-                    borderWidth: 1,
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderColor: '#facc15',
+                    borderWidth: 2,
+                    backgroundColor: 'rgba(250, 204, 21, 0.1)',
                     fill: true,
                     tension: 0.4,
-                    pointRadius: 2
+                    pointRadius: 4,
+                    pointBackgroundColor: '#facc15'
                 }
             ];
             state.charts.trend.update();
@@ -818,6 +819,386 @@ const ctxPie = document.getElementById('pieChart').getContext('2d');
             const chart = state.charts.sparks[id];
             chart.data.datasets[0].data = Array.from({ length: 10 }, () => Math.floor(Math.random() * 50));
             chart.update();
+        });
+    }
+
+    // --- VIEW MANAGEMENT LOGIC ---
+    const btnSwitchView = document.getElementById('btnSwitchView');
+    const impactView = document.getElementById('impactView');
+    const analyticsView = document.getElementById('analyticsView');
+    const reportsView = document.getElementById('reportsView');
+    const settingsView = document.getElementById('settingsView');
+    const dashboardContent = document.getElementById('dashboardContent');
+    const shatterOverlay = document.getElementById('shatterOverlay');
+    
+    // Sidebar nav items
+    const navOverview = document.getElementById('navOverview');
+    const navAllNcs = document.getElementById('navAllNcs');
+    const navReports = document.getElementById('navReports');
+    const navSettings = document.getElementById('navSettings');
+    
+    let currentView = 'OVERVIEW'; // OVERVIEW, IMPACT, ANALYTICS
+
+    function switchView(targetView) {
+        if (currentView === targetView) return;
+        
+        console.log(`Mudando de ${currentView} para ${targetView}`);
+        
+        const currentContainer = getViewContainer(currentView);
+        const targetContainer = getViewContainer(targetView);
+        
+        if (!currentContainer || !targetContainer) return;
+
+        // Resetar botões do cabeçalho ao navegar
+        const viewModeText = document.getElementById('viewModeText');
+        const icon = btnSwitchView?.querySelector('i, svg');
+        
+        if (targetView === 'OVERVIEW') {
+            if (viewModeText) viewModeText.textContent = "Visão de Impacto";
+            if (icon) icon.setAttribute('data-lucide', 'zap');
+        } else if (targetView === 'IMPACT') {
+            if (viewModeText) viewModeText.textContent = "Voltar ao Dashboard";
+            if (icon) icon.setAttribute('data-lucide', 'arrow-left');
+        }
+
+        // Fly out current container
+        currentContainer.classList.add('fly-out');
+        
+        setTimeout(() => {
+            // Hide current
+            currentContainer.classList.add('impact-hidden');
+            currentContainer.style.display = 'none';
+            currentContainer.classList.remove('fly-out');
+            
+            // Show target
+            targetContainer.classList.remove('impact-hidden');
+            targetContainer.style.display = 'block';
+            targetContainer.classList.add('rise-in');
+            
+            // Update data based on view
+            if (targetView === 'IMPACT') updateImpactView();
+            if (targetView === 'ANALYTICS') updateAnalyticsView();
+            
+            lucide.createIcons();
+            currentView = targetView;
+            
+            // Update sidebar active state
+            updateSidebarActive();
+        }, 300); // Super fast timeout
+    }
+
+    function getViewContainer(viewName) {
+        switch(viewName) {
+            case 'OVERVIEW': return dashboardContent;
+            case 'IMPACT': return impactView;
+            case 'ANALYTICS': return analyticsView;
+            default: return null;
+        }
+    }
+
+    function updateSidebarActive() {
+        const navItems = document.querySelectorAll('.nav-item');
+        navItems.forEach(item => item.classList.remove('active'));
+        
+        if (currentView === 'OVERVIEW') navOverview?.classList.add('active');
+        if (currentView === 'ANALYTICS') navAllNcs?.classList.add('active');
+    }
+
+    // Event Listeners
+    if (btnSwitchView) {
+        btnSwitchView.addEventListener('click', () => {
+            const nextView = currentView === 'OVERVIEW' ? 'IMPACT' : 'OVERVIEW';
+            switchView(nextView);
+            
+            const viewModeText = document.getElementById('viewModeText');
+            const icon = btnSwitchView.querySelector('i, svg');
+            if (viewModeText) viewModeText.textContent = nextView === 'IMPACT' ? "Voltar ao Dashboard" : "Visão de Impacto";
+            if (icon) icon.setAttribute('data-lucide', nextView === 'IMPACT' ? 'arrow-left' : 'zap');
+        });
+    }
+
+    if (navOverview) navOverview.addEventListener('click', (e) => { e.preventDefault(); switchView('OVERVIEW'); });
+    if (navAllNcs) navAllNcs.addEventListener('click', (e) => { e.preventDefault(); switchView('ANALYTICS'); });
+
+    // Initialize sidebar state
+    updateSidebarActive();
+
+    function normalizeClientName(name) {
+        if (!name) return "Desconhecido";
+        return name.toString()
+            .toUpperCase()
+            .replace(/\b(LTDA|LTD|S\.A|SA|S\/A|ME|EPP|MEI|EIRELI)\b/g, '')
+            .replace(/[.,-]/g, ' ')
+            .trim()
+            .replace(/\s+/g, ' ');
+    }
+
+    function updateImpactView() {
+        const data = state.currentTableData;
+        
+        // 1. Critical Items (Recurring Codes)
+        const codeCounts = {};
+        data.forEach(nc => {
+            if (nc.codigo) {
+                codeCounts[nc.codigo] = (codeCounts[nc.codigo] || 0) + 1;
+            }
+        });
+
+        const sortedCodes = Object.entries(codeCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 8);
+
+        const criticalCodesList = document.getElementById('criticalCodesList');
+        if (criticalCodesList) {
+            criticalCodesList.innerHTML = sortedCodes.map(([code, count]) => `
+                <div class="impact-item ${count > 2 ? 'critical' : 'warning'}" style="background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent);">
+                    <div class="item-info">
+                        <span class="item-name">${code}</span>
+                        <span class="item-meta">Produto com recorrência metálica</span>
+                    </div>
+                    <span class="item-count" style="background: var(--steel);">${count}x</span>
+                </div>
+            `).join('') || '<p class="empty-state">Nenhum item recorrente identificado.</p>';
+        }
+
+        // 2. Affected Clients (Normalized)
+        const clientImpact = {};
+        data.forEach(nc => {
+            const rawName = nc.cliente || "Desconhecido";
+            const normName = normalizeClientName(rawName);
+            if (!clientImpact[normName]) {
+                clientImpact[normName] = { count: 0, originalNames: new Set() };
+            }
+            clientImpact[normName].count++;
+            clientImpact[normName].originalNames.add(rawName);
+        });
+
+        const sortedClients = Object.entries(clientImpact)
+            .sort((a, b) => b[1].count - a[1].count)
+            .slice(0, 8);
+
+        const affectedClientsList = document.getElementById('affectedClientsList');
+        if (affectedClientsList) {
+            affectedClientsList.innerHTML = sortedClients.map(([normName, info]) => `
+                <div class="impact-item ${info.count > 1 ? 'critical' : ''}" style="background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent);">
+                    <div class="item-info">
+                        <span class="item-name">${normName}</span>
+                        <span class="item-meta">${Array.from(info.originalNames)[0]}</span>
+                    </div>
+                    <span class="item-count">${info.count} NCs</span>
+                </div>
+            `).join('') || '<p class="empty-state">Nenhum cliente afetado nos filtros atuais.</p>';
+        }
+
+        const totalNCs = data.length;
+        const totalMinutes = totalNCs * 30; 
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        const timeLostValue = document.getElementById('timeLostValue');
+        if (timeLostValue) timeLostValue.textContent = `${hours}h ${mins}m`;
+    }
+
+    function updateAnalyticsView() {
+        // Puxar dados do Relatório Geral das NCs (state.dataGeral)
+        const sellerFilter = (nc) => {
+            if (state.filters.selectedSellers.length === 0) return true;
+            return state.filters.selectedSellers.includes(nc.vendedor);
+        };
+
+        let data = state.dataGeral.filter(sellerFilter);
+        
+        if (state.filters.date) {
+            data = data.filter(nc => formatExcelDate(nc.data) === state.filters.date);
+        } else {
+            if (state.filters.tableStart) {
+                data = data.filter(nc => formatExcelDate(nc.data) >= state.filters.tableStart);
+            }
+            if (state.filters.tableEnd) {
+                data = data.filter(nc => formatExcelDate(nc.data) <= state.filters.tableEnd);
+            }
+        }
+
+        // --- 0. Status Indicators ---
+        const statuses = {};
+        data.forEach(nc => {
+            const status = (nc.status_raw || "NÃO DEFINIDO").toUpperCase().trim();
+            statuses[status] = (statuses[status] || 0) + 1;
+        });
+
+        const statusIndicators = document.getElementById('statusIndicators');
+        if (statusIndicators) {
+            if (Object.keys(statuses).length === 0) {
+                statusIndicators.innerHTML = `<div class="metric-card" style="flex:1;text-align:center;padding:1rem;">Nenhuma NC encontrada</div>`;
+            } else {
+                statusIndicators.innerHTML = Object.entries(statuses).map(([status, count]) => {
+                    let colorClass = "blue";
+                    let icon = "info";
+                    if (status.includes("PENDENTE")) { colorClass = "red"; icon = "alert-circle"; }
+                    else if (status.includes("RESOLVIDO") || status.includes("CONCLUÍDO")) { colorClass = "green"; icon = "check-circle"; }
+                    else if (status.includes("ANÁLISE") || status.includes("ANDAMENTO")) { colorClass = "orange"; icon = "clock"; }
+
+                    return `
+                    <div class="metric-card ${colorClass}" style="flex: 1; padding: 1rem; min-width: 150px;">
+                        <div class="card-header" style="margin-bottom: 0.5rem;">
+                            <span class="card-title">${status}</span>
+                            <div class="card-icon"><i data-lucide="${icon}" size="16"></i></div>
+                        </div>
+                        <div class="card-value" style="font-size: 1.5rem;">${count}</div>
+                    </div>
+                    `;
+                }).join('');
+            }
+        }
+        
+        // --- 1. Clientes mais Afetados ---
+        const clientNCs = {};
+        data.forEach(nc => {
+            const client = nc.cliente || "Desconhecido";
+            clientNCs[client] = (clientNCs[client] || 0) + 1;
+        });
+
+        const sortedClients = Object.entries(clientNCs).sort((a, b) => b[1] - a[1]).slice(0, 5); // Descending
+        
+        const topClientsList = document.getElementById('topClientsList');
+        if (topClientsList) {
+            topClientsList.innerHTML = sortedClients.map(([client, count], index) => `
+                <div class="impact-item" style="background: linear-gradient(90deg, rgba(239,68,68,0.05), transparent); border-left: 3px solid var(--danger);">
+                    <div class="item-info">
+                        <span class="item-name">${index + 1}. ${client}</span>
+                        <span class="item-meta">Cliente Afetado</span>
+                    </div>
+                    <span class="item-count" style="background: var(--danger); color: white;">${count} NCs</span>
+                </div>
+            `).join('') || '<p class="empty-state">Nenhum dado encontrado.</p>';
+        }
+
+        // --- 2. Situação por Vendedor ---
+        const sellerStatus = {};
+        data.forEach(nc => {
+            const seller = nc.vendedor || "Outros";
+            const status = (nc.status_raw || "").toUpperCase().trim();
+            if (!sellerStatus[seller]) sellerStatus[seller] = { pendente: 0, resolvido: 0, total: 0 };
+            
+            sellerStatus[seller].total++;
+            if (status.includes("PENDENTE")) sellerStatus[seller].pendente++;
+            else if (status.includes("RESOLVIDO") || status.includes("CONCLUÍDO") || status.includes("FINALIZADO")) sellerStatus[seller].resolvido++;
+        });
+
+        const sortedSellersByTotal = Object.entries(sellerStatus).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
+        
+        const sellerStatusList = document.getElementById('sellerStatusList');
+        if (sellerStatusList) {
+            sellerStatusList.innerHTML = sortedSellersByTotal.map(([seller, stats], index) => `
+                <div class="impact-item" style="background: linear-gradient(90deg, rgba(59,130,246,0.05), transparent); border-left: 3px solid var(--primary);">
+                    <div class="item-info">
+                        <span class="item-name">${index + 1}. ${seller}</span>
+                        <span class="item-meta" style="color: var(--text-muted); font-size: 11px;">
+                            <span style="color: var(--danger); font-weight: bold;">${stats.pendente} Pendentes</span> | 
+                            <span style="color: var(--success); font-weight: bold;">${stats.resolvido} Resolvidas</span>
+                        </span>
+                    </div>
+                    <span class="item-count" style="background: var(--primary); color: white;">${stats.total} Total</span>
+                </div>
+            `).join('') || '<p class="empty-state">Nenhum dado encontrado.</p>';
+        }
+
+        // --- 3. Taxa de Resolução Mensal ---
+        const monthlyStatus = {};
+        data.forEach(nc => {
+            if (!nc.data) return;
+            const dateStr = formatExcelDate(nc.data);
+            if (dateStr) {
+                const parts = dateStr.split('-');
+                if (parts.length >= 2) {
+                    const monthYear = `${parts[1]}/${parts[0]}`; // MM/YYYY
+                    const status = (nc.status_raw || "").toUpperCase().trim();
+                    if (!monthlyStatus[monthYear]) monthlyStatus[monthYear] = { pendente: 0, resolvido: 0, total: 0 };
+                    
+                    monthlyStatus[monthYear].total++;
+                    if (status.includes("PENDENTE")) monthlyStatus[monthYear].pendente++;
+                    else if (status.includes("RESOLVIDO") || status.includes("CONCLUÍDO") || status.includes("FINALIZADO")) monthlyStatus[monthYear].resolvido++;
+                }
+            }
+        });
+
+        const sortedMonthsList = Object.entries(monthlyStatus).sort((a, b) => {
+            const [m1, y1] = a[0].split('/');
+            const [m2, y2] = b[0].split('/');
+            return new Date(y2, m2 - 1) - new Date(y1, m1 - 1); // Descending (recent first)
+        }).slice(0, 5);
+
+        const resolutionRateList = document.getElementById('resolutionRateList');
+        if (resolutionRateList) {
+            resolutionRateList.innerHTML = sortedMonthsList.map(([month, stats]) => {
+                const resRate = stats.total > 0 ? Math.round((stats.resolvido / stats.total) * 100) : 0;
+                let colorClass = resRate >= 80 ? "success" : (resRate >= 50 ? "orange" : "danger");
+                let colorHex = resRate >= 80 ? "#10b981" : (resRate >= 50 ? "#f97316" : "#ef4444");
+                let rgbVal = resRate >= 80 ? "16,185,129" : (resRate >= 50 ? "249,115,22" : "239,68,68");
+                
+                return `
+                <div class="impact-item" style="background: linear-gradient(90deg, rgba(${rgbVal},0.05), transparent); border-left: 3px solid var(--${colorClass});">
+                    <div class="item-info">
+                        <span class="item-name"><i data-lucide="calendar" size="14" style="display:inline; margin-right:4px;"></i>${month}</span>
+                        <span class="item-meta">Resolvidas: <strong style="color:var(--success)">${stats.resolvido}</strong> | Pendentes: <strong style="color:var(--danger)">${stats.pendente}</strong></span>
+                    </div>
+                    <span class="item-count" style="background: var(--${colorClass}); color: white;">${resRate}% Resolvido</span>
+                </div>
+                `;
+            }).join('') || '<p class="empty-state">Nenhum dado mensal encontrado.</p>';
+        }
+
+        // --- 4. Analytical Summary ---
+        const summaryContent = document.getElementById('analyticsSummaryContent');
+        if (summaryContent) {
+            const topClient = sortedClients[0] || ["N/A", 0];
+            const topSeller = sortedSellersByTotal[0] || ["N/A", { total: 0 }];
+            const fullDataLength = state.dataGeral.length > 0 ? state.dataGeral.length : 1;
+            
+            summaryContent.innerHTML = `
+                <div style="text-align: center;">
+                    <i data-lucide="building" size="24" style="color: var(--danger); margin-bottom: 8px;"></i>
+                    <p style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cliente Mais Afetado</p>
+                    <strong style="font-size: 16px; color: var(--text-main);">${topClient[0]}</strong>
+                    <p style="font-size: 12px; color: var(--danger);">${topClient[1]} NCs</p>
+                </div>
+                <div style="text-align: center;">
+                    <i data-lucide="user-x" size="24" style="color: var(--orange); margin-bottom: 8px;"></i>
+                    <p style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Maior Incidência</p>
+                    <strong style="font-size: 16px; color: var(--text-main);">${topSeller[0]}</strong>
+                    <p style="font-size: 12px; color: var(--orange);">${topSeller[1].total} registros</p>
+                </div>
+                <div style="text-align: center;">
+                    <i data-lucide="gauge" size="24" style="color: var(--success); margin-bottom: 8px;"></i>
+                    <p style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Volume Geral</p>
+                    <strong style="font-size: 20px; color: var(--success);">${data.length} NCs totais</strong>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+    }
+
+    const analyticsCharts = {};
+    function renderAnalyticsChart(id, type, data, horizontal = false) {
+        if (analyticsCharts[id]) analyticsCharts[id].destroy();
+        
+        const ctx = document.getElementById(id);
+        if (!ctx) return;
+        
+        analyticsCharts[id] = new Chart(ctx.getContext('2d'), {
+            type: type,
+            data: data,
+            options: {
+                indexAxis: horizontal ? 'y' : 'x',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#94a3b8' } }
+                },
+                scales: type === 'bar' ? {
+                    y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                } : {}
+            }
         });
     }
 });
