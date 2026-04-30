@@ -1,0 +1,4 @@
+"id","data","descricao","cliente","setor"
+"NC001","31/05/2024","Produto com avaria na embalagem","Cliente A / Logística","Logística"
+"NC002","30/05/2024","Atraso na entrega do pedido","Cliente B / Expedição","Expedição"
+"NC004","28/05/2024","Falha na comunicação com o cliente","Cliente D / Atendimento","Atendimento"
