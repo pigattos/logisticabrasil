@@ -1,1204 +1,467 @@
 /**
- * NCs Dashboard - Premium Dark Logic (Multi-select, Vendedor Column & Status Logic)
+ * NCs Dashboard - Strategic Metallic Edition v17.0
+ * FULL RESTORATION + 23-PERSON PRODUCTIVITY PANEL.
  */
 
+Chart.register(ChartDataLabels);
+
+console.log("%c[Dashboard] Iniciando Versão 17.0 (Restoring Stability)", "color: #00FFCC; font-weight: bold;");
+
 document.addEventListener('DOMContentLoaded', () => {
-    // State
+    // --- ESTADO GLOBAL ---
     const state = {
         dataGeral: [],
-        dataPessoal: [],
-        filteredGeral: [],
-        currentTableData: [],
+        filteredData: [],
         charts: {
             pie: null,
             line: null,
-            sparks: {}
+            recurring: null,
+            client: null,
+            reasons: null
         },
-        lineSellersData: {},
         filters: {
             date: '',
             selectedSellers: [],
-            tableStart: '',
-            tableEnd: '',
-            statusTab: 'TODOS'
+            statusTab: 'TODOS',
+            pieDrilldownStatus: null,
+            pieDrilldownSeller: null
         }
     };
 
-    // DOM Elements
-    const btnUpdate = document.getElementById('btnUpdate');
-    const tbody = document.getElementById('tabelaNCs');
-    const dateFilter = document.getElementById('dateFilter');
-    const tableStart = document.getElementById('tableStartDate');
-    const tableEnd = document.getElementById('tableEndDate');
+    const metallicColors = {
+        pendente: '#ef4444',
+        resolvido: '#10b981',
+        analise: '#f59e0b',
+        encaminhado: '#eab308',
+        steel: ['#f8fafc', '#e2e8f0', '#94a3b8', '#64748b', '#475569']
+    };
 
-    // Multi-select elements
-    const btnSellerFilter = document.getElementById('btnSellerFilter');
-    const sellerDropdown = document.getElementById('sellerDropdown');
-    const selectedSellersText = document.getElementById('selectedSellersText');
+    // --- ELEMENTOS DOM ---
+    const elements = {
+        btnUpdate: document.getElementById('btnUpdate'),
+        tbody: document.getElementById('tabelaNCs'),
+        dateFilter: document.getElementById('dateFilter'),
+        sellerDropdown: document.getElementById('sellerDropdown'),
+        selectedSellersText: document.getElementById('selectedSellersText'),
+        btnClearFilters: document.getElementById('btnClearFilters'),
+        statusFilterTabs: document.getElementById('statusFilterTabs'),
+        
+        valTotal: document.getElementById('valTotal'),
+        valPendente: document.getElementById('valPendente'),
+        valResolvido: document.getElementById('valResolvido'),
+        valEmAnalise: document.getElementById('valEmAnalise'),
+        valEncaminhado: document.getElementById('valEncaminhado'),
+        valEficiencia: document.getElementById('valEficiencia'),
+        
+        valMediaCriadas: document.getElementById('valMediaCriadas'),
+        valMediaResolvidas: document.getElementById('valMediaResolvidas'),
+        valEficienciaVerso: document.getElementById('valEficienciaVerso'),
+        valStaffNeeded: document.getElementById('valStaffNeeded'),
+        valTopFocus: document.getElementById('valTopFocus'),
+        valForecastZeragem: document.getElementById('valForecastZeragem'),
+        
+        btnFlipCard: document.getElementById('btnFlipCard'),
+        btnFlipBack: document.getElementById('btnFlipBack'),
+        evolucaoFlipper: document.getElementById('evolucaoFlipper'),
+        btnTableFlip: document.getElementById('btnTableFlip'),
+        btnTableFlipBack: document.getElementById('btnTableFlipBack'),
+        tableAnalysisFlip: document.getElementById('tableAnalysisFlip'),
+        
+        btnResetPie: document.getElementById('btnResetPie'),
+        pieDrilldownLabel: document.getElementById('pieDrilldownLabel')
+    };
 
-    // Display today's date in input but don't filter state by it yet
-    dateFilter.value = new Date().toISOString().split('T')[0];
-    initCharts();
-
-    // Event Listeners
-    btnUpdate.addEventListener('click', loadFromDatabase);
-    dateFilter.addEventListener('change', (e) => { state.filters.date = e.target.value; applyFilters(); });
-    tableStart.addEventListener('change', (e) => { state.filters.tableStart = e.target.value; applyFilters(); });
-    tableEnd.addEventListener('change', (e) => { state.filters.tableEnd = e.target.value; applyFilters(); });
-    
-    // Auto-load on start
+    // --- INICIALIZAÇÃO ---
+    initAllCharts();
     loadFromDatabase();
 
+    // --- EVENTOS ---
+    elements.btnUpdate?.addEventListener('click', loadFromDatabase);
+    elements.dateFilter?.addEventListener('change', (e) => { state.filters.date = e.target.value; applyFilters(); });
+
+    elements.btnClearFilters?.addEventListener('click', () => {
+        state.filters.date = '';
+        state.filters.selectedSellers = [];
+        state.filters.statusTab = 'TODOS';
+        state.filters.pieDrilldownStatus = null;
+        state.filters.pieDrilldownSeller = null;
+        if (elements.btnResetPie) elements.btnResetPie.style.display = 'none';
+        applyFilters();
+    });
+
+    // Filtros de Status (Tabs)
+    elements.statusFilterTabs?.addEventListener('click', (e) => {
+        const tab = e.target.closest('.status-tab');
+        if (!tab) return;
+        elements.statusFilterTabs.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        state.filters.statusTab = tab.dataset.status;
+        applyFilters();
+    });
+
+    // Flip Evolução
+    elements.btnFlipCard?.addEventListener('click', () => {
+        document.getElementById('evolucaoContainer')?.classList.add('flipped');
+        updateBackMetrics();
+    });
+    elements.btnFlipBack?.addEventListener('click', () => {
+        document.getElementById('evolucaoContainer')?.classList.remove('flipped');
+    });
+
+    // Flip Detalhamento Analítico
+    elements.btnTableFlip?.addEventListener('click', () => {
+        document.getElementById('tableAnalysisFlip')?.classList.add('flipped');
+        setTimeout(() => {
+            Object.values(state.charts).forEach(c => c?.resize());
+            updateAnalyticCharts();
+        }, 600);
+    });
+    elements.btnTableFlipBack?.addEventListener('click', () => {
+        document.getElementById('tableAnalysisFlip')?.classList.remove('flipped');
+    });
+
+    // Reset da Rosca
+    elements.btnResetPie?.addEventListener('click', () => {
+        state.filters.pieDrilldownStatus = null;
+        state.filters.pieDrilldownSeller = null;
+        if (elements.btnResetPie) elements.btnResetPie.style.display = 'none';
+        applyFilters();
+    });
+
+    // --- LOGICA DE DADOS ---
+
     async function loadFromDatabase() {
-        btnUpdate.classList.add('loading');
-        btnUpdate.disabled = true;
-        
+        if (elements.btnUpdate) elements.btnUpdate.classList.add('loading');
         try {
-            const response = await fetch('../api/naoconformidade.php');
+            const response = await fetch('../api/naoconformidade.php?t=' + Date.now());
             const result = await response.json();
-
             if (result.status === 'success') {
-                // Mapeia a Base da Logística (Antigo 2026.xlsx)
-                const dataBase = result.dataBase || [];
-                state.dataPessoal = dataBase.map(item => ({
-                    pedido: item.numero_pedido || "",
-                    vendedor: item.vendedor || "",
-                    data: item.data_logistica || "",
-                    codigo: item.codigo_produto || "",
-                    cliente: item.cliente || "",
-                    motivo: item.divergencia || ""
-                }));
-
-                // Mapeia as Não Conformidades da base (Para cruzar dados no Overview)
-                const dataNC = result.dataNC || [];
-                state.dataGeral = dataNC.map(item => ({
+                state.dataGeral = (result.dataNC || []).map(item => ({
                     pedido: item.numero_pedido || "",
                     vendedor: item.vendedor_responsavel || "",
                     data: item.data_ocorrencia || "",
                     codigo: item.codigo || "",
                     cliente: item.cliente_afetado || "",
                     motivo: item.tipo_nao_conformidade || item.titulo || "",
-                    status_raw: item.status || ""
+                    status: (item.status || "PENDENTE").toUpperCase().trim()
                 }));
-
-                console.log("Base Logística:", state.dataPessoal.length);
-                console.log("NCs Geral (DB):", state.dataGeral.length);
-
-                populateSellersFilter();
+                populateSellers();
                 applyFilters();
-                
-                // feedback visual
-                btnUpdate.style.background = 'var(--success)';
-                setTimeout(() => btnUpdate.style.background = 'var(--primary)', 2000);
             }
-        } catch (error) {
-            console.error("Erro ao carregar do DB:", error);
-        } finally {
-            btnUpdate.classList.remove('loading');
-            btnUpdate.disabled = false;
-        }
+        } catch (e) { console.error("[API Error]", e); }
+        finally { if (elements.btnUpdate) elements.btnUpdate.classList.remove('loading'); }
     }
 
-    // Multi-select toggle
-    btnSellerFilter.addEventListener('click', (e) => {
-        e.stopPropagation();
-        sellerDropdown.classList.toggle('active');
-    });
-
-    // Status filter tabs
-    const statusFilterTabs = document.getElementById('statusFilterTabs');
-    if (statusFilterTabs) {
-        statusFilterTabs.addEventListener('click', (e) => {
-            const tab = e.target.closest('.status-tab');
-            if (!tab) return;
-            statusFilterTabs.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            state.filters.statusTab = tab.dataset.status;
-            applyFilters();
-        });
-    }
-
-    const btnClearFilters = document.getElementById('btnClearFilters');
-    if (btnClearFilters) {
-        btnClearFilters.addEventListener('click', () => {
-            state.filters.date = '';
-            document.getElementById('dateFilter').value = '';
-
-            state.filters.selectedSellers = [];
-            Array.from(document.querySelectorAll('#sellerDropdown input[type="checkbox"]')).forEach(cb => cb.checked = false);
-            document.getElementById('selectedSellersText').textContent = "Todos os Vendedores";
-
-            state.filters.statusTab = 'TODOS';
-            document.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
-            const defaultTab = document.querySelector('.status-tab[data-status="TODOS"]');
-            if (defaultTab) defaultTab.classList.add('active');
-
-            state.filters.tableStart = '';
-            state.filters.tableEnd = '';
-            document.getElementById('tableStartDate').value = '';
-            document.getElementById('tableEndDate').value = '';
-
-            if (state.charts.pie) {
-                state.charts.pie.showingSellers = false;
-            }
-
-            applyFilters();
-        });
-    }
-
-    document.addEventListener('click', (e) => {
-        if (!sellerDropdown.contains(e.target) && e.target !== btnSellerFilter) {
-            sellerDropdown.classList.remove('active');
-        }
-    });
-
-    const btnExportExcel = document.getElementById('btnExportExcel');
-    if (btnExportExcel) {
-        btnExportExcel.addEventListener('click', () => {
-            if (!state.currentTableData || state.currentTableData.length === 0) {
-                alert("Não há dados para exportar.");
-                return;
-            }
-
-            const exportData = state.currentTableData.map(nc => {
-                const registroGeral = state.dataGeral.find(g => g.pedido.toString() == nc.pedido.toString());
-                const status = computeStatus(nc, registroGeral);
-                const dateBase = formatExcelDate(nc.data);
-                const dateNC = registroGeral ? (formatExcelDate(registroGeral.data) || '') : '';
-                let motivo = (nc.motivo && nc.motivo.toString().trim() !== "") ? nc.motivo.toString().trim() : "";
-
-                return {
-                    "PEDIDO": nc.pedido,
-                    "VENDEDOR": nc.vendedor,
-                    "CODIGO": nc.codigo,
-                    "DATA R. LOGISTICA": dateBase ? dateBase.split('-').reverse().join('/') : '',
-                    "DATA R. VENDAS": dateNC ? dateNC.split('-').reverse().join('/') : '',
-                    "STATUS": status,
-                    "DIVERGENCIA": motivo,
-                    "CLIENTE": nc.cliente
-                };
-            });
-
-            const ws = XLSX.utils.json_to_sheet(exportData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Detalhamento NCs");
-            XLSX.writeFile(wb, "Detalhamento_NCs.xlsx");
-        });
-    }
-
-    function populateSellersFilter() {
-        const allSellers = [
-            ...state.dataPessoal.map(nc => nc.vendedor),
-            ...state.dataGeral.map(nc => nc.vendedor)
-        ];
-        const uniqueSellers = [...new Set(allSellers.filter(v => v && v.toString().trim() !== ""))].sort();
-
-        sellerDropdown.innerHTML = '';
-        state.filters.selectedSellers = [];
-
-        uniqueSellers.forEach(seller => {
+    function populateSellers() {
+        if (!elements.sellerDropdown) return;
+        const sellers = [...new Set(state.dataGeral.map(nc => nc.vendedor))].filter(v => v).sort();
+        elements.sellerDropdown.innerHTML = '';
+        sellers.forEach(seller => {
             const label = document.createElement('label');
             label.className = 'seller-item';
-
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = seller;
-            checkbox.addEventListener('change', () => {
-                updateSelectedSellers();
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = seller;
+            cb.addEventListener('change', () => {
+                state.filters.selectedSellers = Array.from(elements.sellerDropdown.querySelectorAll('input:checked')).map(i => i.value);
+                updateSelectedSellersText();
                 applyFilters();
             });
-
-            label.appendChild(checkbox);
+            label.appendChild(cb);
             label.appendChild(document.createTextNode(seller));
-            sellerDropdown.appendChild(label);
+            elements.sellerDropdown.appendChild(label);
         });
-
-        updateSelectedSellers();
     }
 
-    function updateSelectedSellers() {
-        const checked = Array.from(sellerDropdown.querySelectorAll('input:checked')).map(i => i.value);
-        state.filters.selectedSellers = checked;
-
-        if (checked.length === 0) {
-            selectedSellersText.textContent = "Todos os Vendedores";
-        } else if (checked.length === 1) {
-            selectedSellersText.textContent = checked[0];
-        } else {
-            selectedSellersText.textContent = `${checked.length} Vendedores`;
+    function updateSelectedSellersText() {
+        const count = state.filters.selectedSellers.length;
+        if (elements.selectedSellersText) {
+            elements.selectedSellersText.innerText = count === 0 ? "Todos os Vendedores" : (count === 1 ? state.filters.selectedSellers[0] : `${count} Vendedores`);
         }
     }
 
     function applyFilters() {
-        const sellerFilter = (nc) => {
-            if (state.filters.selectedSellers.length === 0) return true;
-            return state.filters.selectedSellers.includes(nc.vendedor);
-        };
+        let filtered = state.dataGeral;
+        
+        // Data
+        if (state.filters.date) filtered = filtered.filter(nc => nc.data === state.filters.date);
+        
+        // Vendedores
+        if (state.filters.selectedSellers.length > 0) filtered = filtered.filter(nc => state.filters.selectedSellers.includes(nc.vendedor));
+        
+        // Status (Tabs ou Drilldown)
+        const activeStatus = state.filters.pieDrilldownStatus || state.filters.statusTab;
+        if (activeStatus !== 'TODOS') filtered = filtered.filter(nc => nc.status.includes(activeStatus));
+        
+        // Drilldown de Vendedor específico na rosca
+        if (state.filters.pieDrilldownSeller) filtered = filtered.filter(nc => nc.vendedor === state.filters.pieDrilldownSeller);
 
-        let baseData = state.dataPessoal.filter(sellerFilter);
-
-        let metricData = baseData;
-        if (state.filters.date) {
-            metricData = metricData.filter(nc => formatExcelDate(nc.data) === state.filters.date);
-        }
-
-        let tableData = baseData;
-        if (state.filters.date) {
-            tableData = tableData.filter(nc => formatExcelDate(nc.data) === state.filters.date);
-        } else {
-            if (state.filters.tableStart) {
-                tableData = tableData.filter(nc => formatExcelDate(nc.data) >= state.filters.tableStart);
-            }
-            if (state.filters.tableEnd) {
-                tableData = tableData.filter(nc => formatExcelDate(nc.data) <= state.filters.tableEnd);
-            }
-        }
-
-        // Filtro por status tab
-        if (state.filters.statusTab && state.filters.statusTab !== 'TODOS') {
-            tableData = tableData.filter(nc => {
-                const registroGeral = state.dataGeral.find(g => g.pedido.toString() == nc.pedido.toString());
-                const computedStatus = computeStatus(nc, registroGeral);
-                return computedStatus === state.filters.statusTab;
-            });
-        }
-
-        state.currentTableData = tableData;
-        updateDashboard(metricData, tableData);
+        state.filteredData = filtered;
+        updateMainMetrics(filtered);
+        updatePieChart();
+        updateLineChart();
+        renderTable(filtered);
     }
 
-    function formatExcelDate(excelDate) {
-        if (!excelDate) return "";
-        let date;
-        if (excelDate instanceof Date) {
-            // Already a date, but might be at midnight UTC. 
-            // We want the local date representation.
-            date = excelDate;
-        } else if (typeof excelDate === 'number') {
-            // Excel serial date to JS date
-            date = new Date(Math.round((excelDate - 25569) * 86400 * 1000));
-            // Adjust for timezone to keep the same calendar day
-            date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-        } else {
-            const dateStr = String(excelDate).trim();
-            if (dateStr.includes('/')) {
-                const p = dateStr.split('/');
-                if (p.length === 3) {
-                    const day = p[0].padStart(2, '0');
-                    const month = p[1].padStart(2, '0');
-                    const year = p[2].length === 2 ? '20' + p[2] : p[2];
-                    date = new Date(`${year}-${month}-${day}T12:00:00`); // Use T12:00 to avoid day shift
-                }
-            } else if (dateStr.includes('-')) {
-                date = new Date(dateStr + "T12:00:00");
-            }
-        }
-        if (!date || isNaN(date.getTime())) return "";
-
-        // Return YYYY-MM-DD
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-
-    // Calcula o status de um pedido dado o registro geral correspondente
-    function computeStatus(nc, registroGeral) {
-        const dateBase = formatExcelDate(nc.data);
-        if (!registroGeral) return 'PENDENTE';
-        const dateNC = formatExcelDate(registroGeral.data);
-        if (!dateNC) return 'PENDENTE';
-        if (dateNC < dateBase) return 'REINCIDENTE';   // Vendas registrou ANTES da logística
-        if (dateNC === dateBase) return 'CONFORME';
-        return 'DIVERGENCIA';                           // Vendas registrou DEPOIS da logística
-    }
-
-    function updateDashboard(metricData, tableData) {
-        const totalBase = metricData.length;
-
-        const presentInNC = metricData.filter(nc =>
-            state.dataGeral.some(g => g.pedido.toString() == nc.pedido.toString())
-        );
-
-        let countConforme = 0, countReincidente = 0, countDivergencia = 0;
-        presentInNC.forEach(nc => {
-            const g = state.dataGeral.find(item => item.pedido.toString() == nc.pedido.toString());
-            const s = computeStatus(nc, g);
-            if (s === 'CONFORME') countConforme++;
-            else if (s === 'REINCIDENTE') countReincidente++;
-            else if (s === 'DIVERGENCIA') countDivergencia++;
+    function updateMainMetrics(data) {
+        const c = { P: 0, R: 0, A: 0, E: 0 };
+        data.forEach(nc => {
+            if (nc.status.includes("RESOLVIDO")) c.R++;
+            else if (nc.status.includes("ANALISE")) c.A++;
+            else if (nc.status.includes("ENCAMINHADO")) c.E++;
+            else c.P++;
         });
-
-        const countPendente = totalBase - presentInNC.length;
-
-        updateMetric('valTotal', totalBase);
-        updateMetric('valTotal', totalBase);
-        updateMetric('valComercial', countConforme);
-        updateMetric('valNaoComercial', countPendente);
-        updateMetric('valDivergencia', countDivergencia);
-        updateMetric('valReincidente', countReincidente);
-
-        const getPerc = (val) => totalBase > 0 ? ((val / totalBase) * 100).toFixed(1) + "%" : "0%";
-        document.getElementById('percComercial').innerText = getPerc(countConforme) + " conforme";
-        document.getElementById('percNaoComercial').innerText = getPerc(countPendente) + " pendente";
-        document.getElementById('percDivergencia').innerText = getPerc(countDivergencia) + " divergência";
-        document.getElementById('percReincidente').innerText = getPerc(countReincidente) + " reincidente";
-
-        renderTable(tableData);
-        updateCharts(metricData);
+        if (elements.valTotal) elements.valTotal.innerText = data.length;
+        if (elements.valPendente) elements.valPendente.innerText = c.P;
+        if (elements.valResolvido) elements.valResolvido.innerText = c.R;
+        if (elements.valEmAnalise) elements.valEmAnalise.innerText = c.A;
+        if (elements.valEncaminhado) elements.valEncaminhado.innerText = c.E;
+        if (elements.valEficiencia) elements.valEficiencia.innerText = data.length > 0 ? Math.round((c.R/data.length)*100)+"%" : "0%";
     }
 
-    function updateMetric(id, value) {
-        const el = document.getElementById(id);
-        if (el) {
-            const start = parseInt(el.innerText) || 0;
-            animateValue(el, start, value, 500);
+    function updateBackMetrics() {
+        const data = state.dataGeral;
+        const days = [...new Set(data.map(nc => nc.data))].length || 1;
+        const totalR = data.filter(nc => nc.status.includes("RESOLVIDO")).length;
+        const avgR = totalR / days;
+        const avgC = data.length / days;
+        if (elements.valMediaCriadas) elements.valMediaCriadas.innerText = avgC.toFixed(1);
+        if (elements.valMediaResolvidas) elements.valMediaResolvidas.innerText = avgR.toFixed(1);
+        
+        const trendStatusEl = document.getElementById('trendStatus');
+        if (trendStatusEl) {
+            if (avgR >= avgC) {
+                trendStatusEl.innerText = 'EQUILIBRADO';
+                trendStatusEl.style.color = '#10b981';
+            } else {
+                trendStatusEl.innerText = 'SOBRECARREGADO';
+        trendStatusEl.style.color = '#ef4444';
+            }
         }
     }
 
-    function animateValue(obj, start, end, duration) {
-        let startTimestamp = null;
-        const step = (timestamp) => {
-            if (!startTimestamp) startTimestamp = timestamp;
-            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-            obj.innerHTML = Math.floor(progress * (end - start) + start);
-            if (progress < 1) window.requestAnimationFrame(step);
-        };
-        window.requestAnimationFrame(step);
-    }
-
-    function renderTable(data) {
-        tbody.innerHTML = "";
-
-        const totalInTable = data.length;
-        const presentInNC = data.filter(nc => state.dataGeral.some(g => g.pedido.toString() == nc.pedido.toString()));
-        const pendentes = totalInTable - presentInNC.length;
-
-        document.getElementById('badgeCount').innerText = `${pendentes} Pedidos Pendentes`;
-
-        if (data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Nenhuma informação encontrada na base para os filtros selecionados.</td></tr>`;
-            return;
-        }
-
-        tbody.innerHTML = data.map(nc => {
-            const registroGeral = state.dataGeral.find(g => g.pedido.toString() == nc.pedido.toString());
-
-            const status = computeStatus(nc, registroGeral);
-            const dateBase = formatExcelDate(nc.data);
-            const dateNC = registroGeral ? (formatExcelDate(registroGeral.data) || '---') : '---';
-            let motivo = (nc.motivo && nc.motivo.toString().trim() !== "") ? nc.motivo.toString().trim() : "---";
-
-            let statusClass;
-            switch (status) {
-                case 'CONFORME': statusClass = 'status-done'; break;
-                case 'REINCIDENTE': statusClass = 'status-reincidente'; break;
-                case 'DIVERGENCIA': statusClass = 'status-warning'; break;
-                default: statusClass = 'status-pending'; break;
-            }
-
-            return `
-                <tr>
-                    <td style="font-weight: 700;">${nc.pedido || '---'}</td>
-                    <td>${nc.vendedor || '---'}</td>
-                    <td style="font-family: monospace;">${nc.codigo || '---'}</td>
-                    <td style="text-align: center;">${dateBase ? dateBase.split('-').reverse().join('/') : '---'}</td>
-                    <td style="text-align: center;">${dateNC !== '---' ? dateNC.split('-').reverse().join('/') : '---'}</td>
-                    <td style="text-align: center;"><span class="status-badge ${statusClass}">${status}</span></td>
-                    <td style="font-size: 0.8rem; color: var(--text-dim);">${motivo}</td>
-                    <td style="font-size: 0.75rem; color: var(--text-muted); max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${nc.cliente || ''}">${nc.cliente || '---'}</td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    function initCharts() {
-        // Plugin to draw text in the center of the doughnut chart
-        const centerTextPlugin = {
-            id: 'centerText',
-            beforeDraw: function (chart) {
-                if (chart.config.type !== 'doughnut') return;
-                const ctx = chart.ctx;
-                const width = chart.width;
-                const height = chart.height;
-                ctx.restore();
-
-                let textLines = [];
-                if (state.filters.selectedSellers.length > 0) {
-                    if (state.filters.selectedSellers.length <= 2) {
-                        textLines = state.filters.selectedSellers;
-                    } else {
-                        textLines = [`${state.filters.selectedSellers.length} Vendedores`];
-                    }
-                } else {
-                    textLines = ["Todos"];
-                }
-
-                ctx.font = "bold 14px Inter";
-                ctx.textBaseline = "middle";
-                ctx.fillStyle = "#94a3b8";
-
-                const lineHeight = 18;
-                const totalHeight = textLines.length * lineHeight;
-                const startY = (height - totalHeight) / 2 + (lineHeight / 2);
-
-                textLines.forEach((line, i) => {
-                    const textX = Math.round((width - ctx.measureText(line).width) / 2);
-                    const textY = startY + (i * lineHeight);
-                    ctx.fillText(line, textX, textY);
-                });
-                ctx.save();
+    // --- GRÁFICOS ---
+    function initAllCharts() {
+        const barOptions = {
+            indexAxis: 'y',
+            maintainAspectRatio: false,
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: { ticks: { color: '#fff', font: { size: 11, weight: 'bold' } }, grid: { display: false } }
             }
         };
 
-        const outlabelsPlugin = {
-            id: 'outlabels',
-            afterDraw: function (chart) {
-                if (chart.config.type !== 'doughnut') return;
-                const ctx = chart.ctx;
-                chart.data.datasets.forEach((dataset, i) => {
-                    chart.getDatasetMeta(i).data.forEach((element, index) => {
-                        const dataValue = dataset.data[index];
-                        if (dataValue === 0) return;
-
-                        const total = dataset.data.reduce((acc, val) => acc + val, 0);
-                        const pct = Math.round((dataValue / total) * 100) + '%';
-
-                        const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
-                        const outerRadius = element.outerRadius;
-                        const x = chart.chartArea.left + chart.chartArea.width / 2;
-                        const y = chart.chartArea.top + chart.chartArea.height / 2;
-
-                        const x1 = x + Math.cos(midAngle) * outerRadius;
-                        const y1 = y + Math.sin(midAngle) * outerRadius;
-
-                        const lineLength = 12;
-                        const x2 = x + Math.cos(midAngle) * (outerRadius + lineLength);
-                        const y2 = y + Math.sin(midAngle) * (outerRadius + lineLength);
-
-                        const isRight = x2 > x;
-                        const x3 = isRight ? x2 + 8 : x2 - 8;
-
-                        ctx.beginPath();
-                        ctx.moveTo(x1, y1);
-                        ctx.lineTo(x2, y2);
-                        ctx.lineTo(x3, y2);
-                        ctx.strokeStyle = dataset.backgroundColor[index];
-                        ctx.lineWidth = 1.5;
-                        ctx.stroke();
-
-                        ctx.font = "bold 11px Inter";
-                        ctx.fillStyle = dataset.backgroundColor[index];
-                        ctx.textBaseline = "middle";
-                        ctx.textAlign = isRight ? "left" : "right";
-                        ctx.fillText(pct, isRight ? x3 + 3 : x3 - 3, y2);
-                    });
-                });
-            }
-        };
-
-        const verticalLinePlugin = {
-            id: 'verticalLine',
-            afterDraw: chart => {
-                if (chart.config.type !== 'line') return;
-                if (chart.tooltip?._active?.length) {
-                    let x = chart.tooltip._active[0].element.x;
-                    let yAxis = chart.scales.y;
-                    let ctx = chart.ctx;
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.moveTo(x, yAxis.top);
-                    ctx.lineTo(x, yAxis.bottom);
-                    ctx.lineWidth = 1;
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-                    ctx.setLineDash([5, 5]);
-                    ctx.stroke();
-                    ctx.restore();
-                }
-            }
-        };
-        Chart.register(centerTextPlugin, outlabelsPlugin, verticalLinePlugin);
-
-const ctxPie = document.getElementById('pieChart').getContext('2d');
-        state.charts.pie = new Chart(ctxPie, {
-            type: 'doughnut',
-            data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 0 }] },
-            options: { 
-                cutout: '55%', 
-                rotation: 0, 
-                animation: {
-                    animateRotate: true,
-                    duration: 800, // Tempo um pouquinho maior para o olho acompanhar
-                    easing: 'easeOutQuart' // A MÁGICA DA FLUIDEZ: começa rápido e freia macio no final
-                },
-                layout: { padding: 0 },
-                plugins: { 
-                    legend: { 
-                        position: 'bottom', 
-                        align: 'center', 
-                        labels: { color: '#71717a', font: { size: 12 }, padding: 15, boxWidth: 12 } 
-                    } 
-                }, 
-                maintainAspectRatio: false,
-                onClick: (event, elements) => {
-                    if (elements.length > 0) {
-                        const index = elements[0].index;
-                        let label = state.charts.pie.data.labels[index];
-                        
-                        if (state.charts.pie.showingSellers) {
-                            label = label.split(' (')[0];
-                            state.filters.selectedSellers = [label];
-                            Array.from(sellerDropdown.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
-                                cb.checked = (cb.value === label);
-                            });
-                            selectedSellersText.textContent = label;
-                        } else {
-                            state.filters.selectedSellers = [];
-                            Array.from(sellerDropdown.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
-                                cb.checked = false;
-                            });
-                            selectedSellersText.textContent = "Todos os Vendedores";
-                        }
-
-                        // Manda a rosca girar 360 graus
-                        state.charts.pie.options.rotation = (state.charts.pie.options.rotation || 0) + 360;
-                        
-                        // Atualiza os dados imediatamente junto com o giro
-                        applyFilters();
+        const pieOptions = {
+            cutout: '75%',
+            maintainAspectRatio: false,
+            responsive: true,
+            plugins: { 
+                legend: { display: false },
+                datalabels: {
+                    color: '#fff',
+                    anchor: 'end',
+                    align: 'end',
+                    offset: 8,
+                    font: { weight: 'bold', size: 10 },
+                    formatter: (v, ctx) => {
+                        let sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        return sum > 0 ? (v * 100 / sum).toFixed(1) + "%" : "";
                     }
                 }
             }
-        });
+        };
 
-        const ctxLine = document.getElementById('lineChart').getContext('2d');
-        state.charts.line = new Chart(ctxLine, {
-            type: 'line',
-            data: { labels: [], datasets: [] },
-            options: {
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { display: true, position: 'top', labels: { color: '#71717a', font: { size: 10 } } },
-                    tooltip: {
-                        callbacks: {
-                            afterBody: function (context) {
-                                const index = context[0].dataIndex;
-                                const label = state.charts.line.data.labels[index];
-                                const dayKey = label.split('/').reverse().join('-');
-                                const sellers = state.lineSellersData[dayKey] || {};
-                                let text = ['', 'Vendedores neste dia:'];
-                                for (let s in sellers) {
-                                    text.push(`- ${s}: ${sellers[s]}`);
-                                }
-                                return text;
+        // Rosca Principal
+        const pieCtx = document.getElementById('pieChart')?.getContext('2d');
+        if (pieCtx) {
+            state.charts.pie = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [] }] },
+                options: {
+                    ...pieOptions,
+                    layout: { padding: 25 },
+                    onClick: (e, els) => {
+                        if (els.length > 0) {
+                            const idx = els[0].index;
+                            const label = state.charts.pie.data.labels[idx];
+                            if (!state.filters.pieDrilldownStatus) {
+                                state.filters.pieDrilldownStatus = label.toUpperCase();
+                            } else {
+                                state.filters.pieDrilldownSeller = label;
                             }
-                        }
-                    }
-                },
-                scales: { y: { grid: { color: '#171717' }, ticks: { color: '#71717a' } }, x: { grid: { display: false }, ticks: { color: '#71717a' } } },
-                maintainAspectRatio: false,
-                onClick: (event, elements) => {
-                    const chart = state.charts.line;
-                    if (!chart) return;
-
-                    const xAxis = chart.scales.x;
-                    const yAxis = chart.scales.y;
-                    const eY = event.y !== undefined ? event.y : event.native.offsetY;
-                    const eX = event.x !== undefined ? event.x : event.native.offsetX;
-
-                    // Se clicou na área do eixo X (ou próximo das labels) ou num ponto da linha
-                    if (eY >= xAxis.top || elements.length > 0) {
-                        let index;
-                        if (elements.length > 0) {
-                            index = elements[0].index;
-                        } else {
-                            const dataX = xAxis.getValueForPixel(eX);
-                            if (dataX === undefined) return;
-                            index = Math.round(dataX);
-                        }
-
-                        const dayKey = Object.keys(state.lineSellersData)[index];
-                        if (dayKey) {
-                            document.getElementById('dateFilter').value = dayKey;
-                            state.filters.date = dayKey;
                             applyFilters();
                         }
                     }
                 }
-            }
-        });
-
-        // Gráfico de Tendência (Verso do Card)
-        const ctxTrend = document.getElementById('trendChart').getContext('2d');
-        state.charts.trend = new Chart(ctxTrend, {
-            type: 'line',
-            data: { labels: [], datasets: [] },
-            options: {
-                plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
-                scales: {
-                    y: { grid: { color: '#171717' }, ticks: { color: '#71717a' } },
-                    x: { grid: { display: false }, ticks: { color: '#71717a' } }
-                },
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false }
-            }
-        });
-
-        // Listeners do Card Flip
-        const btnFlipCard = document.getElementById('btnFlipCard');
-        const btnFlipBack = document.getElementById('btnFlipBack');
-        const evolucaoContainer = document.getElementById('evolucaoContainer');
-        if (btnFlipCard && evolucaoContainer) {
-            btnFlipCard.addEventListener('click', () => {
-                evolucaoContainer.classList.add('flipped');
-            });
-            btnFlipBack.addEventListener('click', () => {
-                evolucaoContainer.classList.remove('flipped');
             });
         }
 
-        initSpark('sparkTotal', '#facc15');
-        initSpark('sparkComercial', '#10b981');
-        initSpark('sparkNaoComercial', '#ef4444');
-        initSpark('sparkDivergencia', '#f97316');
-        initSpark('sparkReincidente', '#ec4899');
-    }
-
-    function initSpark(id, color) {
-        const ctx = document.getElementById(id).getContext('2d');
-        state.charts.sparks[id] = new Chart(ctx, {
-            type: 'line',
-            data: { labels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], datasets: [{ data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], borderColor: color, borderWidth: 2, pointRadius: 0, tension: 0.4, fill: false }] },
-            options: { plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false } }, maintainAspectRatio: false, responsive: true }
-        });
-    }
-
-    function updateCharts(metricData) {
-        // Pie Chart: Panorama de Vendas Atual
-        const showingStatuses = state.filters.selectedSellers.length === 1;
-        state.charts.pie.showingSellers = !showingStatuses;
-
-        if (!showingStatuses) {
-            const sellerCounts = {};
-            metricData.forEach(nc => {
-                const seller = nc.vendedor || 'Desconhecido';
-                sellerCounts[seller] = (sellerCounts[seller] || 0) + 1;
+        const lineCtx = document.getElementById('lineChart')?.getContext('2d');
+        if (lineCtx) {
+            state.charts.line = new Chart(lineCtx, { 
+                type: 'line', 
+                data: { labels: [], datasets: [] }, 
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                } 
             });
+        }
 
-            state.charts.pie.data.labels = Object.keys(sellerCounts);
-            state.charts.pie.data.datasets[0].data = Object.values(sellerCounts);
+        const recCtx = document.getElementById('recurringChart')?.getContext('2d');
+        if (recCtx) state.charts.recurring = new Chart(recCtx, { type: 'bar', data: { labels: [], datasets: [{ data: [], backgroundColor: '#60a5fa' }] }, options: barOptions });
 
-            const colors = ['#facc15', '#eab308', '#ca8a04', '#a1a1aa', '#71717a', '#52525b', '#3f3f46', '#fef08a'];
-            state.charts.pie.data.datasets[0].backgroundColor = Object.keys(sellerCounts).map((_, i) => colors[i % colors.length]);
+        const clientCtx = document.getElementById('clientImpactChart')?.getContext('2d');
+        if (clientCtx) state.charts.client = new Chart(clientCtx, { type: 'bar', data: { labels: [], datasets: [{ data: [], backgroundColor: '#10b981' }] }, options: barOptions });
+
+        const reasonCtx = document.getElementById('reasonsChart')?.getContext('2d');
+        if (reasonCtx) state.charts.reasons = new Chart(reasonCtx, { type: 'doughnut', data: { labels: [], datasets: [{ data: [], backgroundColor: metallicColors.steel }] }, options: { ...pieOptions, cutout: '70%' } });
+    }
+
+    function generateShades(baseColor, count) {
+        const shades = [];
+        for (let i = 0; i < count; i++) {
+            const opacity = 1 - (i * 0.7 / count);
+            shades.push(baseColor.replace(')', `, ${opacity})`).replace('rgb', 'rgba').replace('#ef4444', 'rgba(239, 68, 68').replace('#10b981', 'rgba(16, 185, 129').replace('#f59e0b', 'rgba(245, 158, 11').replace('#eab308', 'rgba(234, 179, 8'));
+        }
+        return shades;
+    }
+
+    function updatePieChart() {
+        if (!state.charts.pie) return;
+        const chartData = { labels: [], values: [], colors: [] };
+        
+        if (!state.filters.pieDrilldownStatus) {
+            const counts = { P: 0, R: 0, A: 0, E: 0 };
+            state.dataGeral.forEach(nc => {
+                if (nc.status.includes("RESOLVIDO")) counts.R++; else if (nc.status.includes("ANALISE")) counts.A++; else if (nc.status.includes("ENCAMINHADO")) counts.E++; else counts.P++;
+            });
+            chartData.labels = ['Pendente', 'Resolvido', 'Análise', 'Encaminhado'];
+            chartData.values = [counts.P, counts.R, counts.A, counts.E];
+            chartData.colors = [metallicColors.pendente, metallicColors.resolvido, metallicColors.analise, metallicColors.encaminhado];
+            if (elements.btnResetPie) elements.btnResetPie.style.display = 'none';
+            if (elements.pieDrilldownLabel) elements.pieDrilldownLabel.innerText = "Visão Geral (Clique p/ Detalhar)";
         } else {
-            let counts = { CONFORME: 0, PENDENTE: 0, DIVERGENCIA: 0, REINCIDENTE: 0 };
-            metricData.forEach(nc => {
-                const g = state.dataGeral.find(item => item.pedido.toString() == nc.pedido.toString());
-                const s = computeStatus(nc, g);
-                counts[s] = (counts[s] || 0) + 1;
+            const status = state.filters.pieDrilldownStatus;
+            const sellersMap = {};
+            state.dataGeral.filter(nc => nc.status.includes(status)).forEach(nc => {
+                sellersMap[nc.vendedor] = (sellersMap[nc.vendedor] || 0) + 1;
             });
-
-            const labels = [];
-            const data = [];
-            const bg = [];
-
-            if (counts.CONFORME > 0) { labels.push('Conforme'); data.push(counts.CONFORME); bg.push('#10b981'); }
-            if (counts.PENDENTE > 0) { labels.push('Pendente'); data.push(counts.PENDENTE); bg.push('#ef4444'); }
-            if (counts.DIVERGENCIA > 0) { labels.push('Divergência'); data.push(counts.DIVERGENCIA); bg.push('#f97316'); }
-            if (counts.REINCIDENTE > 0) { labels.push('Reincidente'); data.push(counts.REINCIDENTE); bg.push('#ec4899'); }
-
-            state.charts.pie.data.labels = labels;
-            state.charts.pie.data.datasets[0].data = data;
-            state.charts.pie.data.datasets[0].backgroundColor = bg;
+            const top = Object.keys(sellersMap).sort((a,b) => sellersMap[b] - sellersMap[a]).slice(0, 10);
+            chartData.labels = top;
+            chartData.values = top.map(v => sellersMap[v]);
+            
+            let base = metallicColors.pendente;
+            if (status.includes("RESOLVIDO")) base = metallicColors.resolvido;
+            else if (status.includes("ANALISE")) base = metallicColors.analise;
+            else if (status.includes("ENCAMINHADO")) base = metallicColors.encaminhado;
+            
+            chartData.colors = generateShades(base, top.length);
+            
+            if (elements.btnResetPie) elements.btnResetPie.style.display = 'block';
+            if (elements.pieDrilldownLabel) elements.pieDrilldownLabel.innerHTML = `Mostrando: <strong style="color:#fff;">${status}</strong>${state.filters.pieDrilldownSeller ? ` > <strong style="color:var(--primary);">${state.filters.pieDrilldownSeller}</strong>` : ''}`;
         }
+        
+        state.charts.pie.data.labels = chartData.labels;
+        state.charts.pie.data.datasets[0].data = chartData.values;
+        state.charts.pie.data.datasets[0].backgroundColor = chartData.colors;
         state.charts.pie.update();
+    }
 
-        // Line chart (Evolução)
-        const days = {};
-        metricData.forEach(nc => {
-            const day = formatExcelDate(nc.data);
-            if (!day) return;
-            if (!days[day]) days[day] = { CONFORME: 0, PENDENTE: 0, DIVERGENCIA: 0, REINCIDENTE: 0, sellers: {} };
-
-            const g = state.dataGeral.find(item => item.pedido.toString() == nc.pedido.toString());
-            const s = computeStatus(nc, g);
-            days[day][s]++;
-
-            const seller = nc.vendedor || 'Desc.';
-            days[day].sellers[seller] = (days[day].sellers[seller] || 0) + 1;
+    function updateLineChart() {
+        if (!state.charts.line) return;
+        const dMap = {};
+        state.filteredData.forEach(nc => {
+            if (!dMap[nc.data]) dMap[nc.data] = { P: 0, R: 0 };
+            if (nc.status.includes("RESOLVIDO")) dMap[nc.data].R++; else dMap[nc.data].P++;
         });
-
-        const sortedDays = Object.keys(days).sort();
-        state.lineSellersData = {};
-        sortedDays.forEach(d => { state.lineSellersData[d] = days[d].sellers; });
-
-        state.charts.line.data.labels = sortedDays.map(d => d.split('-').slice(1).reverse().join('/'));
-
+        const labels = Object.keys(dMap).sort();
+        state.charts.line.data.labels = labels.map(l => l.split('-').reverse().join('/'));
         state.charts.line.data.datasets = [
-            { label: 'Conforme', data: sortedDays.map(d => days[d].CONFORME), borderColor: '#10b981', backgroundColor: 'transparent', tension: 0.4 },
-            { label: 'Pendente', data: sortedDays.map(d => days[d].PENDENTE), borderColor: '#ef4444', backgroundColor: 'transparent', tension: 0.4 },
-            { label: 'Divergência', data: sortedDays.map(d => days[d].DIVERGENCIA), borderColor: '#f97316', backgroundColor: 'transparent', tension: 0.4 },
-            { label: 'Reincidente', data: sortedDays.map(d => days[d].REINCIDENTE), borderColor: '#ec4899', backgroundColor: 'transparent', tension: 0.4 }
+            { label: 'Pendentes', data: labels.map(l => dMap[l].P), borderColor: metallicColors.pendente, fill: false },
+            { label: 'Resolvidos', data: labels.map(l => dMap[l].R), borderColor: metallicColors.resolvido, fill: false }
         ];
-
         state.charts.line.update();
-
-        // Calculate Trend Data (Linear Regression of PENDENTE + DIVERGENCIA per day)
-        const esquecimentosPerDay = sortedDays.map(d => days[d].PENDENTE + days[d].DIVERGENCIA);
-
-        function calculateTrendLine(dataPoints) {
-            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-            const n = dataPoints.length;
-            if (n === 0) return [];
-            for (let i = 0; i < n; i++) {
-                sumX += i;
-                sumY += dataPoints[i];
-                sumXY += i * dataPoints[i];
-                sumX2 += i * i;
-            }
-            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-            const intercept = (sumY - slope * sumX) / n;
-            return dataPoints.map((_, i) => slope * i + intercept);
-        }
-
-        const trendData = calculateTrendLine(esquecimentosPerDay);
-
-        let avg = 0;
-        if (esquecimentosPerDay.length > 0) {
-            avg = esquecimentosPerDay.reduce((a, b) => a + b, 0) / esquecimentosPerDay.length;
-        }
-        document.getElementById('trendAvg').textContent = avg.toFixed(1);
-
-        const trendStatusEl = document.getElementById('trendStatus');
-        if (trendData.length > 1) {
-            const first = trendData[0];
-            const last = trendData[trendData.length - 1];
-            if (last > first + 0.1) {
-                trendStatusEl.textContent = 'Aumentando ⚠️';
-                trendStatusEl.style.color = '#ef4444';
-            } else if (last < first - 0.1) {
-                trendStatusEl.textContent = 'Diminuindo 📉';
-                trendStatusEl.style.color = '#10b981';
-            } else {
-                trendStatusEl.textContent = 'Estável ➡️';
-                trendStatusEl.style.color = '#94a3b8';
-            }
-        } else {
-            trendStatusEl.textContent = 'N/A';
-            trendStatusEl.style.color = '#64748b';
-        }
-
-        if (state.charts.trend) {
-            state.charts.trend.data.labels = state.charts.line.data.labels;
-            state.charts.trend.data.datasets = [
-                {
-                    label: 'Tendência',
-                    data: trendData,
-                    borderColor: '#facc15',
-                    borderWidth: 3,
-                    borderDash: [5, 5],
-                    backgroundColor: 'transparent',
-                    pointRadius: 0,
-                    tension: 0.1
-                },
-                {
-                    label: 'Esquecimentos Reais',
-                    data: esquecimentosPerDay,
-                    borderColor: '#facc15',
-                    borderWidth: 2,
-                    backgroundColor: 'rgba(250, 204, 21, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#facc15'
-                }
-            ];
-            state.charts.trend.update();
-        }
-
-        Object.keys(state.charts.sparks).forEach(id => {
-            const chart = state.charts.sparks[id];
-            chart.data.datasets[0].data = Array.from({ length: 10 }, () => Math.floor(Math.random() * 50));
-            chart.update();
-        });
     }
 
-    // --- VIEW MANAGEMENT LOGIC ---
-    const btnSwitchView = document.getElementById('btnSwitchView');
-    const impactView = document.getElementById('impactView');
-    const analyticsView = document.getElementById('analyticsView');
-    const reportsView = document.getElementById('reportsView');
-    const settingsView = document.getElementById('settingsView');
-    const dashboardContent = document.getElementById('dashboardContent');
-    const shatterOverlay = document.getElementById('shatterOverlay');
-    
-    // Sidebar nav items
-    const navOverview = document.getElementById('navOverview');
-    const navAllNcs = document.getElementById('navAllNcs');
-    const navReports = document.getElementById('navReports');
-    const navSettings = document.getElementById('navSettings');
-    
-    let currentView = 'OVERVIEW'; // OVERVIEW, IMPACT, ANALYTICS
-
-    function switchView(targetView) {
-        if (currentView === targetView) return;
+    function updateAnalyticCharts() {
+        const data = state.filteredData;
+        if (data.length === 0) return;
         
-        console.log(`Mudando de ${currentView} para ${targetView}`);
-        
-        const currentContainer = getViewContainer(currentView);
-        const targetContainer = getViewContainer(targetView);
-        
-        if (!currentContainer || !targetContainer) return;
-
-        // Resetar botões do cabeçalho ao navegar
-        const viewModeText = document.getElementById('viewModeText');
-        const icon = btnSwitchView?.querySelector('i, svg');
-        
-        if (targetView === 'OVERVIEW') {
-            if (viewModeText) viewModeText.textContent = "Visão de Impacto";
-            if (icon) icon.setAttribute('data-lucide', 'zap');
-        } else if (targetView === 'IMPACT') {
-            if (viewModeText) viewModeText.textContent = "Voltar ao Dashboard";
-            if (icon) icon.setAttribute('data-lucide', 'arrow-left');
+        const codeC = {}; data.forEach(nc => { if (nc.codigo) codeC[nc.codigo] = (codeC[nc.codigo] || 0) + 1; });
+        const topC = Object.keys(codeC).sort((a,b) => codeC[b] - codeC[a]).slice(0, 15);
+        if (state.charts.recurring) { 
+            const canvas = state.charts.recurring.canvas;
+            canvas.parentElement.style.height = (topC.length * 35 + 50) + "px"; // Dynamic height for scroll
+            state.charts.recurring.data.labels = topC; 
+            state.charts.recurring.data.datasets[0].data = topC.map(c => codeC[c]); 
+            state.charts.recurring.update(); 
         }
 
-        // Fly out current container
-        currentContainer.classList.add('fly-out');
-        
-        setTimeout(() => {
-            // Hide current
-            currentContainer.classList.add('impact-hidden');
-            currentContainer.style.display = 'none';
-            currentContainer.classList.remove('fly-out');
+        const clientC = {}; data.forEach(nc => { if (nc.cliente) clientC[nc.cliente] = (clientC[nc.cliente] || 0) + 1; });
+        const topCli = Object.keys(clientC).sort((a,b) => clientC[b] - clientC[a]).slice(0, 15);
+        if (state.charts.client) { 
+            const canvas = state.charts.client.canvas;
+            canvas.parentElement.style.height = (topCli.length * 35 + 50) + "px"; // Dynamic height for scroll
+            state.charts.client.data.labels = topCli.map(c => c.substring(0, 18)); 
+            state.charts.client.data.datasets[0].data = topCli.map(c => clientC[c]); 
+            state.charts.client.update(); 
+        }
+
+        const reasonC = {}; data.forEach(nc => { if (nc.motivo) reasonC[nc.motivo] = (reasonC[nc.motivo] || 0) + 1; });
+        const topRea = Object.keys(reasonC).sort((a,b) => reasonC[b] - reasonC[a]).slice(0, 5);
+        if (state.charts.reasons) { 
+            state.charts.reasons.data.labels = topRea.map(r => r.substring(0, 15)); 
+            state.charts.reasons.data.datasets[0].data = topRea.map(r => reasonC[r]); 
+            state.charts.reasons.update(); 
+        }
+
+        // --- PAINEL DE PODER DE FOGO (23 PESSOAS) ---
+        const totalD = [...new Set(state.dataGeral.map(nc => nc.data))].length || 1;
+        const totalR = state.dataGeral.filter(nc => nc.status.includes("RESOLVIDO")).length;
+        const avgR_1p = totalR / totalD;
+        const avgC_demand = state.dataGeral.length / totalD;
+        const totalM_demand = avgC_demand * 22;
+        const capacity_23p = avgR_1p * 23;
+
+        const suggestionsEl = document.getElementById('valSugestoes');
+        if (suggestionsEl) {
+            const peopleRequired = avgR_1p > 0 ? (avgC_demand / avgR_1p).toFixed(1) : "---";
             
-            // Show target
-            targetContainer.classList.remove('impact-hidden');
-            targetContainer.style.display = 'block';
-            targetContainer.classList.add('rise-in');
-            
-            // Update data based on view
-            if (targetView === 'IMPACT') updateImpactView();
-            if (targetView === 'ANALYTICS') updateAnalyticsView();
-            
-            lucide.createIcons();
-            currentView = targetView;
-            
-            // Update sidebar active state
-            updateSidebarActive();
-        }, 300); // Super fast timeout
-    }
-
-    function getViewContainer(viewName) {
-        switch(viewName) {
-            case 'OVERVIEW': return dashboardContent;
-            case 'IMPACT': return impactView;
-            case 'ANALYTICS': return analyticsView;
-            default: return null;
-        }
-    }
-
-    function updateSidebarActive() {
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => item.classList.remove('active'));
-        
-        if (currentView === 'OVERVIEW') navOverview?.classList.add('active');
-        if (currentView === 'ANALYTICS') navAllNcs?.classList.add('active');
-    }
-
-    // Event Listeners
-    if (btnSwitchView) {
-        btnSwitchView.addEventListener('click', () => {
-            const nextView = currentView === 'OVERVIEW' ? 'IMPACT' : 'OVERVIEW';
-            switchView(nextView);
-            
-            const viewModeText = document.getElementById('viewModeText');
-            const icon = btnSwitchView.querySelector('i, svg');
-            if (viewModeText) viewModeText.textContent = nextView === 'IMPACT' ? "Voltar ao Dashboard" : "Visão de Impacto";
-            if (icon) icon.setAttribute('data-lucide', nextView === 'IMPACT' ? 'arrow-left' : 'zap');
-        });
-    }
-
-    if (navOverview) navOverview.addEventListener('click', (e) => { e.preventDefault(); switchView('OVERVIEW'); });
-    if (navAllNcs) navAllNcs.addEventListener('click', (e) => { e.preventDefault(); switchView('ANALYTICS'); });
-
-    // Initialize sidebar state
-    updateSidebarActive();
-
-    function normalizeClientName(name) {
-        if (!name) return "Desconhecido";
-        return name.toString()
-            .toUpperCase()
-            .replace(/\b(LTDA|LTD|S\.A|SA|S\/A|ME|EPP|MEI|EIRELI)\b/g, '')
-            .replace(/[.,-]/g, ' ')
-            .trim()
-            .replace(/\s+/g, ' ');
-    }
-
-    function updateImpactView() {
-        const data = state.currentTableData;
-        
-        // 1. Critical Items (Recurring Codes)
-        const codeCounts = {};
-        data.forEach(nc => {
-            if (nc.codigo) {
-                codeCounts[nc.codigo] = (codeCounts[nc.codigo] || 0) + 1;
-            }
-        });
-
-        const sortedCodes = Object.entries(codeCounts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 8);
-
-        const criticalCodesList = document.getElementById('criticalCodesList');
-        if (criticalCodesList) {
-            criticalCodesList.innerHTML = sortedCodes.map(([code, count]) => `
-                <div class="impact-item ${count > 2 ? 'critical' : 'warning'}" style="background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent);">
-                    <div class="item-info">
-                        <span class="item-name">${code}</span>
-                        <span class="item-meta">Produto com recorrência metálica</span>
-                    </div>
-                    <span class="item-count" style="background: var(--steel);">${count}x</span>
+            suggestionsEl.innerHTML = `
+                <div class="insight-item" style="border-left-color: #94a3b8;">
+                    <span class="insight-label">ENTRADA DIÁRIA (DEMANDA)</span>
+                    <div class="insight-value"><b style="color:#fff;">${avgC_demand.toFixed(1)}</b> <small>NCs/dia</small></div>
                 </div>
-            `).join('') || '<p class="empty-state">Nenhum item recorrente identificado.</p>';
-        }
-
-        // 2. Affected Clients (Normalized)
-        const clientImpact = {};
-        data.forEach(nc => {
-            const rawName = nc.cliente || "Desconhecido";
-            const normName = normalizeClientName(rawName);
-            if (!clientImpact[normName]) {
-                clientImpact[normName] = { count: 0, originalNames: new Set() };
-            }
-            clientImpact[normName].count++;
-            clientImpact[normName].originalNames.add(rawName);
-        });
-
-        const sortedClients = Object.entries(clientImpact)
-            .sort((a, b) => b[1].count - a[1].count)
-            .slice(0, 8);
-
-        const affectedClientsList = document.getElementById('affectedClientsList');
-        if (affectedClientsList) {
-            affectedClientsList.innerHTML = sortedClients.map(([normName, info]) => `
-                <div class="impact-item ${info.count > 1 ? 'critical' : ''}" style="background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent);">
-                    <div class="item-info">
-                        <span class="item-name">${normName}</span>
-                        <span class="item-meta">${Array.from(info.originalNames)[0]}</span>
-                    </div>
-                    <span class="item-count">${info.count} NCs</span>
+                <div class="insight-item" style="border-left-color: #facc15;">
+                    <span class="insight-label">SAÍDA ATUAL (1 PESSOA)</span>
+                    <div class="insight-value"><b style="color:#facc15;">${avgR_1p.toFixed(1)}</b> <small>NCs/dia</small></div>
                 </div>
-            `).join('') || '<p class="empty-state">Nenhum cliente afetado nos filtros atuais.</p>';
-        }
-
-        const totalNCs = data.length;
-        const totalMinutes = totalNCs * 30; 
-        const hours = Math.floor(totalMinutes / 60);
-        const mins = totalMinutes % 60;
-        const timeLostValue = document.getElementById('timeLostValue');
-        if (timeLostValue) timeLostValue.textContent = `${hours}h ${mins}m`;
-    }
-
-    function updateAnalyticsView() {
-        // Puxar dados do Relatório Geral das NCs (state.dataGeral)
-        const sellerFilter = (nc) => {
-            if (state.filters.selectedSellers.length === 0) return true;
-            return state.filters.selectedSellers.includes(nc.vendedor);
-        };
-
-        let data = state.dataGeral.filter(sellerFilter);
-        
-        if (state.filters.date) {
-            data = data.filter(nc => formatExcelDate(nc.data) === state.filters.date);
-        } else {
-            if (state.filters.tableStart) {
-                data = data.filter(nc => formatExcelDate(nc.data) >= state.filters.tableStart);
-            }
-            if (state.filters.tableEnd) {
-                data = data.filter(nc => formatExcelDate(nc.data) <= state.filters.tableEnd);
-            }
-        }
-
-        // --- 0. Status Indicators ---
-        const statuses = {};
-        data.forEach(nc => {
-            const status = (nc.status_raw || "NÃO DEFINIDO").toUpperCase().trim();
-            statuses[status] = (statuses[status] || 0) + 1;
-        });
-
-        const statusIndicators = document.getElementById('statusIndicators');
-        if (statusIndicators) {
-            if (Object.keys(statuses).length === 0) {
-                statusIndicators.innerHTML = `<div class="metric-card" style="flex:1;text-align:center;padding:1rem;">Nenhuma NC encontrada</div>`;
-            } else {
-                statusIndicators.innerHTML = Object.entries(statuses).map(([status, count]) => {
-                    let colorClass = "blue";
-                    let icon = "info";
-                    if (status.includes("PENDENTE")) { colorClass = "red"; icon = "alert-circle"; }
-                    else if (status.includes("RESOLVIDO") || status.includes("CONCLUÍDO")) { colorClass = "green"; icon = "check-circle"; }
-                    else if (status.includes("ANÁLISE") || status.includes("ANDAMENTO")) { colorClass = "orange"; icon = "clock"; }
-
-                    return `
-                    <div class="metric-card ${colorClass}" style="flex: 1; padding: 1rem; min-width: 150px;">
-                        <div class="card-header" style="margin-bottom: 0.5rem;">
-                            <span class="card-title">${status}</span>
-                            <div class="card-icon"><i data-lucide="${icon}" size="16"></i></div>
-                        </div>
-                        <div class="card-value" style="font-size: 1.5rem;">${count}</div>
-                    </div>
-                    `;
-                }).join('');
-            }
-        }
-        
-        // --- 1. Clientes mais Afetados ---
-        const clientNCs = {};
-        data.forEach(nc => {
-            const client = nc.cliente || "Desconhecido";
-            clientNCs[client] = (clientNCs[client] || 0) + 1;
-        });
-
-        const sortedClients = Object.entries(clientNCs).sort((a, b) => b[1] - a[1]).slice(0, 5); // Descending
-        
-        const topClientsList = document.getElementById('topClientsList');
-        if (topClientsList) {
-            topClientsList.innerHTML = sortedClients.map(([client, count], index) => `
-                <div class="impact-item" style="background: linear-gradient(90deg, rgba(239,68,68,0.05), transparent); border-left: 3px solid var(--danger);">
-                    <div class="item-info">
-                        <span class="item-name">${index + 1}. ${client}</span>
-                        <span class="item-meta">Cliente Afetado</span>
-                    </div>
-                    <span class="item-count" style="background: var(--danger); color: white;">${count} NCs</span>
+                <div class="insight-item" style="border-left-color: #ef4444; background: rgba(239, 68, 68, 0.05);">
+                    <span class="insight-label">EQUIPE NECESSÁRIA (IDEAL)</span>
+                    <div class="insight-value"><b style="color:#ef4444;">${peopleRequired}</b> <small>Pessoas</small></div>
                 </div>
-            `).join('') || '<p class="empty-state">Nenhum dado encontrado.</p>';
-        }
-
-        // --- 2. Situação por Vendedor ---
-        const sellerStatus = {};
-        data.forEach(nc => {
-            const seller = nc.vendedor || "Outros";
-            const status = (nc.status_raw || "").toUpperCase().trim();
-            if (!sellerStatus[seller]) sellerStatus[seller] = { pendente: 0, resolvido: 0, total: 0 };
-            
-            sellerStatus[seller].total++;
-            if (status.includes("PENDENTE")) sellerStatus[seller].pendente++;
-            else if (status.includes("RESOLVIDO") || status.includes("CONCLUÍDO") || status.includes("FINALIZADO")) sellerStatus[seller].resolvido++;
-        });
-
-        const sortedSellersByTotal = Object.entries(sellerStatus).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
-        
-        const sellerStatusList = document.getElementById('sellerStatusList');
-        if (sellerStatusList) {
-            sellerStatusList.innerHTML = sortedSellersByTotal.map(([seller, stats], index) => `
-                <div class="impact-item" style="background: linear-gradient(90deg, rgba(59,130,246,0.05), transparent); border-left: 3px solid var(--primary);">
-                    <div class="item-info">
-                        <span class="item-name">${index + 1}. ${seller}</span>
-                        <span class="item-meta" style="color: var(--text-muted); font-size: 11px;">
-                            <span style="color: var(--danger); font-weight: bold;">${stats.pendente} Pendentes</span> | 
-                            <span style="color: var(--success); font-weight: bold;">${stats.resolvido} Resolvidas</span>
-                        </span>
-                    </div>
-                    <span class="item-count" style="background: var(--primary); color: white;">${stats.total} Total</span>
-                </div>
-            `).join('') || '<p class="empty-state">Nenhum dado encontrado.</p>';
-        }
-
-        // --- 3. Taxa de Resolução Mensal ---
-        const monthlyStatus = {};
-        data.forEach(nc => {
-            if (!nc.data) return;
-            const dateStr = formatExcelDate(nc.data);
-            if (dateStr) {
-                const parts = dateStr.split('-');
-                if (parts.length >= 2) {
-                    const monthYear = `${parts[1]}/${parts[0]}`; // MM/YYYY
-                    const status = (nc.status_raw || "").toUpperCase().trim();
-                    if (!monthlyStatus[monthYear]) monthlyStatus[monthYear] = { pendente: 0, resolvido: 0, total: 0 };
-                    
-                    monthlyStatus[monthYear].total++;
-                    if (status.includes("PENDENTE")) monthlyStatus[monthYear].pendente++;
-                    else if (status.includes("RESOLVIDO") || status.includes("CONCLUÍDO") || status.includes("FINALIZADO")) monthlyStatus[monthYear].resolvido++;
-                }
-            }
-        });
-
-        const sortedMonthsList = Object.entries(monthlyStatus).sort((a, b) => {
-            const [m1, y1] = a[0].split('/');
-            const [m2, y2] = b[0].split('/');
-            return new Date(y2, m2 - 1) - new Date(y1, m1 - 1); // Descending (recent first)
-        }).slice(0, 5);
-
-        const resolutionRateList = document.getElementById('resolutionRateList');
-        if (resolutionRateList) {
-            resolutionRateList.innerHTML = sortedMonthsList.map(([month, stats]) => {
-                const resRate = stats.total > 0 ? Math.round((stats.resolvido / stats.total) * 100) : 0;
-                let colorClass = resRate >= 80 ? "success" : (resRate >= 50 ? "orange" : "danger");
-                let colorHex = resRate >= 80 ? "#10b981" : (resRate >= 50 ? "#f97316" : "#ef4444");
-                let rgbVal = resRate >= 80 ? "16,185,129" : (resRate >= 50 ? "249,115,22" : "239,68,68");
-                
-                return `
-                <div class="impact-item" style="background: linear-gradient(90deg, rgba(${rgbVal},0.05), transparent); border-left: 3px solid var(--${colorClass});">
-                    <div class="item-info">
-                        <span class="item-name"><i data-lucide="calendar" size="14" style="display:inline; margin-right:4px;"></i>${month}</span>
-                        <span class="item-meta">Resolvidas: <strong style="color:var(--success)">${stats.resolvido}</strong> | Pendentes: <strong style="color:var(--danger)">${stats.pendente}</strong></span>
-                    </div>
-                    <span class="item-count" style="background: var(--${colorClass}); color: white;">${resRate}% Resolvido</span>
-                </div>
-                `;
-            }).join('') || '<p class="empty-state">Nenhum dado mensal encontrado.</p>';
-        }
-
-        // --- 4. Analytical Summary ---
-        const summaryContent = document.getElementById('analyticsSummaryContent');
-        if (summaryContent) {
-            const topClient = sortedClients[0] || ["N/A", 0];
-            const topSeller = sortedSellersByTotal[0] || ["N/A", { total: 0 }];
-            const fullDataLength = state.dataGeral.length > 0 ? state.dataGeral.length : 1;
-            
-            summaryContent.innerHTML = `
-                <div style="text-align: center;">
-                    <i data-lucide="building" size="24" style="color: var(--danger); margin-bottom: 8px;"></i>
-                    <p style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cliente Mais Afetado</p>
-                    <strong style="font-size: 16px; color: var(--text-main);">${topClient[0]}</strong>
-                    <p style="font-size: 12px; color: var(--danger);">${topClient[1]} NCs</p>
-                </div>
-                <div style="text-align: center;">
-                    <i data-lucide="user-x" size="24" style="color: var(--orange); margin-bottom: 8px;"></i>
-                    <p style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Maior Incidência</p>
-                    <strong style="font-size: 16px; color: var(--text-main);">${topSeller[0]}</strong>
-                    <p style="font-size: 12px; color: var(--orange);">${topSeller[1].total} registros</p>
-                </div>
-                <div style="text-align: center;">
-                    <i data-lucide="gauge" size="24" style="color: var(--success); margin-bottom: 8px;"></i>
-                    <p style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Volume Geral</p>
-                    <strong style="font-size: 20px; color: var(--success);">${data.length} NCs totais</strong>
+                <div class="insight-item" style="border-left-color: #10b981;">
+                    <span class="insight-label">TEMPO PARA ZERAR PENDENTES</span>
+                    <div class="insight-value"><b style="color:#10b981;">${Math.ceil(avgR_1p > 0 ? (data.filter(nc => !nc.status.includes("RESOLVIDO")).length / avgR_1p) : 0)}</b> <small>dias úteis</small></div>
                 </div>
             `;
-            lucide.createIcons();
         }
     }
 
-    const analyticsCharts = {};
-    function renderAnalyticsChart(id, type, data, horizontal = false) {
-        if (analyticsCharts[id]) analyticsCharts[id].destroy();
-        
-        const ctx = document.getElementById(id);
-        if (!ctx) return;
-        
-        analyticsCharts[id] = new Chart(ctx.getContext('2d'), {
-            type: type,
-            data: data,
-            options: {
-                indexAxis: horizontal ? 'y' : 'x',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom', labels: { color: '#94a3b8' } }
-                },
-                scales: type === 'bar' ? {
-                    y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
-                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
-                } : {}
-            }
-        });
+    function renderTable(data) {
+        if (!elements.tbody) return;
+        elements.tbody.innerHTML = data.slice(0, 500).map(nc => {
+            let sClass = nc.status.includes("RESOLVIDO") ? 'status-done' : (nc.status.includes("ANALISE") ? 'status-warning' : (nc.status.includes("ENCAMINHADO") ? 'status-reincidente' : 'status-pending'));
+            return `<tr><td>${nc.pedido}</td><td>${nc.vendedor}</td><td>${nc.codigo}</td><td style="text-align:center;">${nc.data.split('-').reverse().join('/')}</td><td style="text-align:center;">Média</td><td style="text-align:center;"><span class="status-badge ${sClass}">${nc.status}</span></td><td style="text-align:center;">---</td><td>${nc.cliente}</td></tr>`;
+        }).join('');
+        if (document.getElementById('badgeCount')) document.getElementById('badgeCount').innerText = `${data.length} NCs`;
+        lucide.createIcons();
     }
 });

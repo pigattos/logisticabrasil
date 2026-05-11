@@ -3,7 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NCs Dashboard - Premium Dark</title>
+    <title>NCs Dashboard - Portal Brasil Logística</title>
+    <meta name="description" content="Dashboard de gerenciamento de Não Conformidades da Portal Brasil. Acompanhamento de performance, divergências e análise de impacto operacional em tempo real.">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="NCs Dashboard - Portal Brasil">
+    <meta property="og:description" content="Gestão inteligente de não conformidades e retrabalho logístico.">
+    <meta property="og:image" content="screw_bg.png">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:title" content="NCs Dashboard - Portal Brasil">
+    <meta property="twitter:description" content="Gestão inteligente de não conformidades logísticas.">
     <link rel="stylesheet" href="styles.css?v=1.6">
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,6 +25,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <!-- SheetJS (Excel Support) -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -32,7 +45,7 @@
         <nav>
             <a href="#" class="nav-item active" id="navOverview">
                 <i data-lucide="layout-grid" size="20"></i>
-                <span>NC nas NC</span>
+                <span>Visão Geral</span>
             </a>
             <a href="#" class="nav-item" id="navAllNcs">
                 <i data-lucide="list" size="20"></i>
@@ -74,9 +87,10 @@
             </div>
             <div class="header-actions">
                 <div class="action-box">
-                    <i data-lucide="calendar" size="18"></i>
-                    <input type="date" id="dateFilter" class="date-input">
+                    <label for="dateFilter" class="sr-only">Filtrar por data</label>
+                    <input type="date" id="dateFilter" class="date-input" aria-label="Data da ocorrência">
                 </div>
+                
                 <div class="multi-select-container">
                     <button id="btnSellerFilter" class="action-box multi-select-trigger">
                         <i data-lucide="users" size="18"></i>
@@ -88,13 +102,8 @@
                     </div>
                 </div>
 
-                <button id="btnSwitchView" class="action-box btn-impact-mode" title="Mudar para Visão de Impacto">
-                    <i data-lucide="zap" size="18" style="color: #FFD700;"></i>
-                    <span id="viewModeText">Visão de Impacto</span>
-                </button>
-
                 <button id="btnClearFilters" class="btn-clear-filters">
-                    <i data-lucide="filter-x" size="16"></i> Limpar Filtros
+                    <i data-lucide="filter-x" size="16"></i> Limpar
                 </button>
             </div>
         </header>
@@ -102,72 +111,77 @@
         <!-- Dashboard Content Container (To be shattered/hidden) -->
         <div id="dashboardContent">
             <!-- Metrics Grid -->
+            <!-- Metrics Grid -->
             <section class="metrics-grid">
-            <div class="metric-card blue" data-tooltip="Todos os registros feitos pela logística">
-                <div class="card-header">
-                    <span class="card-title">Total da Base</span>
-                    <div class="card-icon"><i data-lucide="database" size="20"></i></div>
+                <div class="metric-card" data-status="TOTAL">
+                    <div class="card-header">
+                        <span class="card-title">TOTAL NC</span>
+                        <div class="card-icon-status"><i data-lucide="layers" size="20"></i></div>
+                    </div>
+                    <div class="card-value" id="valTotal">0</div>
                 </div>
-                <div class="card-value" id="valTotal">0</div>
-                <p class="card-subtext">Total de pedidos na base</p>
-                <div class="card-sparkline"><canvas id="sparkTotal"></canvas></div>
-            </div>
-            
-            <div class="metric-card green" data-tooltip="Registrado pela logística e comercial no mesmo dia">
-                <div class="card-header">
-                    <span class="card-title">Conformes</span>
-                    <div class="card-icon"><i data-lucide="check-circle" size="18"></i></div>
-                </div>
-                <div class="card-value" id="valComercial">0</div>
-                <p class="card-subtext" id="percComercial">0% conforme</p>
-                <div class="card-sparkline"><canvas id="sparkComercial"></canvas></div>
-            </div>
 
-            <div class="metric-card red" data-tooltip="Registrado pela logística e não registrado pelo comercial ainda">
-                <div class="card-header">
-                    <span class="card-title">Pendentes</span>
-                    <div class="card-icon"><i data-lucide="alert-triangle" size="18"></i></div>
+                <div class="metric-card red" data-status="PENDENTE">
+                    <div class="card-header">
+                        <span class="card-title">PENDENTE</span>
+                        <div class="card-icon-status"><i data-lucide="alert-circle" size="20"></i></div>
+                    </div>
+                    <div class="card-value" id="valPendente">0</div>
                 </div>
-                <div class="card-value" id="valNaoComercial">0</div>
-                <p class="card-subtext" id="percNaoComercial">0% pendente</p>
-                <div class="card-sparkline"><canvas id="sparkNaoComercial"></canvas></div>
-            </div>
+                
+                <div class="metric-card green" data-status="RESOLVIDO">
+                    <div class="card-header">
+                        <span class="card-title">RESOLVIDO</span>
+                        <div class="card-icon-status"><i data-lucide="check-circle" size="20"></i></div>
+                    </div>
+                    <div class="card-value" id="valResolvido">0</div>
+                </div>
 
-            <div class="metric-card orange" data-tooltip="Registrado pelo comercial após sinalização">
-                <div class="card-header">
-                    <span class="card-title">Divergências</span>
-                    <div class="card-icon"><i data-lucide="alert-circle" size="18"></i></div>
+                <div class="metric-card orange" data-status="EM ANALISE">
+                    <div class="card-header">
+                        <span class="card-title">EM ANÁLISE</span>
+                        <div class="card-icon-status"><i data-lucide="clock" size="20"></i></div>
+                    </div>
+                    <div class="card-value" id="valEmAnalise">0</div>
                 </div>
-                <div class="card-value" id="valDivergencia">0</div>
-                <p class="card-subtext" id="percDivergencia">0% divergência</p>
-                <div class="card-sparkline"><canvas id="sparkDivergencia"></canvas></div>
-            </div>
 
-            <div class="metric-card pink" data-tooltip="Apareceu novamente na planilha">
-                <div class="card-header">
-                    <span class="card-title">Reincidentes</span>
-                    <div class="card-icon"><i data-lucide="repeat-2" size="18"></i></div>
+                <div class="metric-card yellow" data-status="ENCAMINHADO">
+                    <div class="card-header">
+                        <span class="card-title">ENCAMINHADO</span>
+                        <div class="card-icon-status"><i data-lucide="info" size="20"></i></div>
+                    </div>
+                    <div class="card-value" id="valEncaminhado">0</div>
                 </div>
-                <div class="card-value" id="valReincidente">0</div>
-                <p class="card-subtext" id="percReincidente">0% reincidente</p>
-                <div class="card-sparkline"><canvas id="sparkReincidente"></canvas></div>
-            </div>
-        </section>
+
+                <div class="metric-card blue" data-status="EFICIENCIA">
+                    <div class="card-header">
+                        <span class="card-title">MÉDIA SETOR</span>
+                        <div class="card-icon-status"><i data-lucide="trending-up" size="20"></i></div>
+                    </div>
+                    <div class="card-value" id="valEficiencia">0%</div>
+                </div>
+            </section>
 
         <!-- Charts Grid -->
         <section class="charts-grid">
-            <div class="chart-card" data-tooltip="Panorama geral de registros por vendedor. Clique em uma fatia para detalhar.">
-                <h3>Panorama de Vendas Atual</h3>
+            <div class="chart-card" data-tooltip="Análise de status por vendedor com porcentagem. Clique para detalhar.">
+                <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2>NC por Vendedor (Status)</h2>
+                    <button id="btnResetPie" class="btn-icon" title="Voltar" style="display: none;">
+                        <i data-lucide="rotate-ccw" size="18"></i>
+                    </button>
+                </div>
                 <div class="chart-container">
                     <canvas id="pieChart"></canvas>
                 </div>
+                <div id="pieDrilldownLabel" style="text-align: center; margin-top: 10px; font-size: 0.8rem; color: var(--text-dim);"></div>
             </div>
             <div class="chart-card flip-container" id="evolucaoContainer" data-tooltip="Acompanhamento temporal. Clique no ícone de tendência para mudar a visão.">
                 <div class="flipper" id="evolucaoFlipper">
                     <!-- Frente do Card: Evolução Original -->
                     <div class="front">
                         <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                            <h3>Evolução de NCs no Período</h3>
+                            <h2>Evolução de NCs no Período</h2>
                             <button id="btnFlipCard" class="btn-icon" title="Ver Tendência">
                                 <i data-lucide="trending-up" size="18"></i>
                             </button>
@@ -177,205 +191,130 @@
                         </div>
                     </div>
                     <!-- Verso do Card: Tendência -->
-                    <div class="back">
-                        <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                            <h3 style="color: #0ea5e9;">Tendência & Média de Esquecimentos</h3>
-                            <button id="btnFlipBack" class="btn-icon" title="Voltar à Evolução">
-                                <i data-lucide="arrow-left" size="18"></i>
+                    <div class="back" style="padding: 1.5rem;">
+                        <div class="chart-header">
+                            <h3>Performance Comparativa</h3>
+                            <button id="btnFlipBack" class="btn-icon">
+                                <i data-lucide="rotate-ccw" size="18"></i>
                             </button>
                         </div>
                         <div class="trend-stats">
                             <div class="trend-stat-box">
-                                <span>Média de Esquecimentos</span>
-                                <strong id="trendAvg">0.0</strong>
+                                <span>MÉDIA CRIADAS / DIA</span>
+                                <strong id="valMediaCriadas">0.0</strong>
                             </div>
                             <div class="trend-stat-box">
-                                <span>Frequência de Esq.</span>
-                                <strong id="trendStatus">Estável</strong>
+                                <span>MÉDIA RESOLVIDAS / DIA</span>
+                                <strong id="valMediaResolvidas">0.0</strong>
                             </div>
                         </div>
-                        <div style="height: 180px; position: relative;">
-                            <canvas id="trendChart"></canvas>
+                        <div class="trend-stats" style="margin-top: 1rem;">
+                            <div class="trend-stat-box" style="width: 100%; text-align: center; border-color: var(--primary);">
+                                <span>SAÚDE DO FLUXO (HOJE)</span>
+                                <strong id="trendStatus" style="font-size: 1.4rem;">Analisando...</strong>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Table Section -->
-        <section class="table-card">
-            <div class="table-header">
-                <div class="table-title">
-                    <h3>Detalhamento das NCs</h3>
-                    <span class="badge-count" id="badgeCount">0 NCs</span>
-                </div>
-                <div class="table-filters">
-                    <button id="btnExportExcel" class="btn-sync" style="width: auto; padding: 0.35rem 0.875rem; font-size: 0.72rem; background: var(--success); border-radius: 6px;">
-                        <i data-lucide="download" size="14"></i> Exportar
-                    </button>
-                    <div class="status-filter-tabs" id="statusFilterTabs">
-                        <button class="status-tab active" data-status="TODOS">Todos</button>
-                        <button class="status-tab" data-status="CONFORME">Conforme</button>
-                        <button class="status-tab" data-status="PENDENTE">Pendente</button>
-                        <button class="status-tab" data-status="DIVERGENCIA">Divergência</button>
-                        <button class="status-tab" data-status="REINCIDENTE">Reincidente</button>
-                    </div>
-                    <div class="range-group">
-                        <label>De: <input type="date" id="tableStartDate" class="date-input-sm"></label>
-                        <label>Até: <input type="date" id="tableEndDate" class="date-input-sm"></label>
-                    </div>
-                </div>
-            </div>
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>PEDIDO</th>
-                            <th>VENDEDOR</th>
-                            <th>CODIGO</th>
-                            <th style="text-align: center;">DATA R. LOGISTICA</th>
-                            <th style="text-align: center;">DATA R. VENDAS</th>
-                            <th>STATUS</th>
-                            <th>DIVERGENCIA</th>
-                            <th>CLIENTE</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabelaNCs">
-                        <tr>
-                            <td colspan="6" class="empty-state">
-                                Aguardando sincronização de arquivos...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div> <!-- End dashboardContent -->
-
-        <!-- Impact View (Hidden by default) -->
-        <section id="impactView" class="impact-hidden" style="display: none;">
-            <div class="impact-header">
-                <h2 class="impact-title">Análise de Impacto Empresarial</h2>
-                <p class="impact-subtitle">Reflexão sobre retrabalho e eficiência operacional</p>
-            </div>
-
-            <div class="impact-grid">
-                <!-- Top Problematic Codes -->
-                <div class="impact-card critical-codes">
-                    <div class="impact-card-header">
-                        <i data-lucide="unplug" size="24" class="impact-icon-red"></i>
-                        <h3>Itens Reincidentes (Gargalos)</h3>
-                    </div>
-                    <div id="criticalCodesList" class="impact-list">
-                        <!-- Items injected by JS -->
-                    </div>
-                </div>
-
-                <!-- Affected Clients -->
-                <div class="impact-card affected-clients">
-                    <div class="impact-card-header">
-                        <i data-lucide="users" size="24" class="impact-icon-blue"></i>
-                        <h3>Clientes Impactados pelo Retrabalho</h3>
-                    </div>
-                    <div id="affectedClientsList" class="impact-list">
-                        <!-- Items injected by JS -->
-                    </div>
-                </div>
-
-                <!-- Efficiency/Time Loss -->
-                <div class="impact-card efficiency-loss">
-                    <div class="impact-card-header">
-                        <i data-lucide="clock" size="24" class="impact-icon-orange"></i>
-                        <h3>Perda de Eficiência Operacional</h3>
-                    </div>
-                    <div class="efficiency-stats">
-                        <div class="efficiency-stat">
-                            <span class="stat-label">Tempo Estimado de Retrabalho</span>
-                            <span id="timeLostValue" class="stat-value">0h</span>
+        <!-- Table & Analytics Card (Flipable) -->
+        <section class="chart-card flip-container" id="tableAnalysisFlip" style="grid-column: 1 / -1; padding: 0;">
+            <div class="flipper" id="tableFlipper">
+                <!-- Frente: Detalhamento Original -->
+                <div class="front table-card-front">
+                    <div class="table-header">
+                        <div class="table-title">
+                            <h2>Detalhamento das NCs</h2>
+                            <span class="badge-count" id="badgeCount">0 NCs</span>
                         </div>
-                        <div class="efficiency-stat">
-                            <span class="stat-label">Custo de Oportunidade</span>
-                            <span class="stat-badge high">Alto Impacto</span>
+                        <div class="table-filters">
+                            <button id="btnTableFlip" class="btn-add-nc" style="background: linear-gradient(135deg, #4b5563, #1f2937); color: #fff;">
+                                <i data-lucide="zap" size="14"></i> Visão Analítica PRO
+                            </button>
+                            <button id="btnExportExcel" class="btn-sync" style="width: auto; padding: 0.35rem 0.875rem; font-size: 0.72rem; background: var(--success); border-radius: 6px;">
+                                <i data-lucide="download" size="14"></i> Exportar
+                            </button>
+                            <div class="status-filter-tabs" id="statusFilterTabs">
+                                <button class="status-tab active" data-status="TODOS">TODOS</button>
+                                <button class="status-tab" data-status="PENDENTE">PENDENTE</button>
+                                <button class="status-tab" data-status="RESOLVIDO">RESOLVIDO</button>
+                                <button class="status-tab" data-status="ANALISE">EM ANÁLISE</button>
+                                <button class="status-tab" data-status="ENCAMINHADO">ENCAMINHADO</button>
+                            </div>
                         </div>
                     </div>
-                    <div class="impact-reflexion">
-                        <p>Cada Não Conformidade gera um ciclo de procura, re-conferência e comunicação que consome tempo precioso da equipe.</p>
-                        <ul class="reflexion-list">
-                            <li><i data-lucide="alert-circle" size="14"></i> Itens que voltam em novos pedidos sem correção prévia.</li>
-                            <li><i data-lucide="alert-circle" size="14"></i> Desgaste na relação com o cliente final.</li>
-                            <li><i data-lucide="alert-circle" size="14"></i> Risco de atrasos em toda a cadeia logística.</li>
-                        </ul>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>PEDIDO</th>
+                                    <th>VENDEDOR</th>
+                                    <th>CODIGO</th>
+                                    <th style="text-align: center;">DATA</th>
+                                    <th style="text-align: center;">PRIORA</th>
+                                    <th style="text-align: center;">STATUS</th>
+                                    <th style="text-align: center;">ANEXO</th>
+                                    <th>CLIENTE</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaNCs">
+                                <tr><td colspan="8" class="empty-state">Sincronizando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Verso: Visão Analítica Estratégica -->
+                <div class="back analytics-card-back">
+                    <div class="chart-header" style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <button id="btnTableFlipBack" class="btn-icon">
+                                <i data-lucide="rotate-ccw" size="18"></i>
+                            </button>
+                            <h2>Deep Analytics & Projeções</h2>
+                        </div>
+                        <div class="badge-count" style="background: rgba(14, 165, 233, 0.1); color: #0ea5e9; border-color: rgba(14, 165, 233, 0.2);">
+                            Eficiência Setorial: <span id="valEficienciaVerso">0%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="analytics-grid-4">
+                        <div class="analytics-card">
+                            <h3><i data-lucide="refresh-cw" size="14"></i> Peças Reincidentes</h3>
+                            <div class="chart-container-mini"><canvas id="recurringChart"></canvas></div>
+                        </div>
+                        <div class="analytics-card">
+                            <h3><i data-lucide="users" size="14"></i> Impacto/Cliente</h3>
+                            <div class="chart-container-mini"><canvas id="clientImpactChart"></canvas></div>
+                        </div>
+                        <div class="analytics-card">
+                            <h3><i data-lucide="pie-chart" size="14"></i> Motivos de Falha (%)</h3>
+                            <div class="chart-container-mini"><canvas id="reasonsChart"></canvas></div>
+                        </div>
+                        <div class="analytics-card" id="insightCard" style="background: rgba(250, 204, 21, 0.05); border-color: rgba(250, 204, 21, 0.2);">
+                            <h3><i data-lucide="lightbulb" size="14" style="color: #facc15;"></i> Sugestões de Ações</h3>
+                            <div class="insight-list" id="valSugestoes" style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                                <div class="insight-item">
+                                    <span class="insight-label" style="font-size: 0.65rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Necessidade de Staff</span>
+                                    <div class="insight-value" id="valStaffNeeded" style="font-size: 1.1rem; font-weight: 800; color: #facc15;">Calculando...</div>
+                                </div>
+                                <div class="insight-item">
+                                    <span class="insight-label" style="font-size: 0.65rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Foco Imediato</span>
+                                    <div class="insight-value" id="valTopFocus" style="font-size: 1.1rem; font-weight: 800; color: #fff;">Analisando...</div>
+                                </div>
+                                <div class="insight-item">
+                                    <span class="insight-label" style="font-size: 0.65rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Previsão de Zeragem</span>
+                                    <div class="insight-value" id="valForecastZeragem" style="font-size: 1.1rem; font-weight: 800; color: #fff;">---</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Analytics View (Todas as NCs / Geral) - Clean & Metallic -->
-        <section id="analyticsView" class="impact-hidden" style="display: none;">
-            <div class="analytics-header">
-                <h2 class="analytics-title">Visão Global de Não Conformidades</h2>
-                <p class="impact-subtitle">Análise consolidada de performance e métricas gerais</p>
-            </div>
-
-            <!-- Status Indicators Row -->
-            <div id="statusIndicators" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; justify-content: space-between;">
-                <!-- Injected by JS -->
-            </div>
-
-            <div class="analytics-grid">
-                <!-- Clientes mais Afetados (List 1) -->
-                <div class="analytics-card" style="grid-row: span 2;">
-                    <h3><i data-lucide="users" size="20"></i> Clientes mais Afetados</h3>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1rem;">Clientes com maior volume de NCs</p>
-                    <div id="topClientsList" class="impact-list">
-                        <!-- Injected by JS -->
-                    </div>
-                </div>
-
-                <!-- Situação por Vendedor (List 2) -->
-                <div class="analytics-card" style="grid-row: span 2;">
-                    <h3><i data-lucide="user-check" size="20"></i> Situação por Vendedor</h3>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1rem;">Volume de Pendentes vs Resolvidas</p>
-                    <div id="sellerStatusList" class="impact-list">
-                        <!-- Injected by JS -->
-                    </div>
-                </div>
-
-                <!-- Taxa de Resolução (List 3) -->
-                <div class="analytics-card" style="grid-row: span 2;">
-                    <h3><i data-lucide="target" size="20"></i> Taxa de Resolução</h3>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1rem;">Comparativo de Pendências e Soluções</p>
-                    <div id="resolutionRateList" class="impact-list">
-                        <!-- Injected by JS -->
-                    </div>
-                </div>
-
-                <!-- Summary Metrics (Metallic Box) -->
-                <div class="analytics-card" style="grid-column: 1 / -1; display: flex; justify-content: space-around; align-items: center; background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent);">
-                    <div id="analyticsSummaryContent" style="display: flex; gap: 3rem; width: 100%; justify-content: space-around;">
-                        <!-- Injected by JS -->
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Settings View -->
-        <section id="settingsView" class="impact-hidden" style="display: none;">
-            <div class="analytics-header">
-                <h2 class="analytics-title">Configurações</h2>
-                <p class="impact-subtitle">Gerenciamento do Dashboard Premium</p>
-            </div>
-            <div class="analytics-grid" style="max-width: 600px; margin: 0 auto;">
-                <div class="analytics-card">
-                    <h3><i data-lucide="tool" size="20"></i> Sistema</h3>
-                    <div class="impact-reflexion">
-                        <button id="btnClearCache" class="btn-sync" style="width: 100%; margin-bottom: 15px;">
-                            <i data-lucide="trash-2" size="16"></i> Limpar Cache do Sistema
-                        </button>
-                        <p style="font-size: 12px; color: var(--text-muted);">Versão do Sistema: 5.8 Metallic Edition</p>
-                    </div>
-                </div>
-            </div>
-        </section>
     </main>
 
     <script src="app.js?v=5.8"></script>
